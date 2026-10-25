@@ -1,11 +1,1227 @@
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..76c69fe
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,22 @@
++/.gradle/
++/android/.gradle/
++/android/build/
++/android/app/build/
++/host/toolchain/
++/evidence/*
++!/evidence/README.md
++/backups/*
++!/backups/README.md
++/diff/*
++!/diff/README.md
++*.apk
++*.btsnoop
++*.pcap*
++*.bin
++*.img
++*.keystore
++*.jks
++__pycache__/
++*.pyc
++local.properties
++*.log
+diff --git a/README.md b/README.md
+new file mode 100644
+index 0000000..842486d
+--- /dev/null
++++ b/README.md
+@@ -0,0 +1,58 @@
++# M30 Bluetooth Security Lab
++
++Project for an owned Samsung SM-M305F (`m30lte`) running Android 10. The app uses Android Bluetooth APIs and never transmits on install or boot. Keep all RF tests inside the isolated lab; advertisements are broadcasts and cannot be contained by an address allowlist.
++
++## Layout
++
++- `android/`: Kotlin app source and Gradle project
++- `host/`: local toolchain (ignored from Git)
++- `scripts/`: reproducible setup, build, install, cleanup
++- `research/`: source-backed hardware and API notes
++- `evidence/`: private captures/logs (ignored from Git)
++- `reports/`: redacted observations and feasibility assessment
++- `backups/`: private backup staging; none taken during this task
++- `tests/`: manual test procedures
++- `diff/`: local review diffs (generated files ignored)
++
++## Rebuild
++
++```bash
++cd ~/m30-security-lab
++./scripts/bootstrap-toolchain.sh
++./scripts/build.sh
++./scripts/install.sh YOUR_ADB_SERIAL
++```
++
++`bootstrap-toolchain.sh` fetches Gradle 8.10.2 from Gradle, JDK 21 from Adoptium, and Android platform/build tools 35 from Google. The JDK endpoint is rolling; the build records the installed version. `build.sh` creates a project-specific signing key on first use in ignored `host/toolchain/`. Preserve that key to upgrade the installed app. Losing it requires uninstalling this package before installing a differently signed build. The host's system `adb` is used; the local Android SDK lacks platform-tools.
++
++Run tests with:
++
++```bash
++cd ~/m30-security-lab/android
++JAVA_HOME=../host/toolchain/jdk21 ANDROID_HOME=../host/toolchain/sdk \
++  ../host/toolchain/gradle-8.10.2/bin/gradle --no-daemon testDebugUnitTest
++```
++
++The app uses `targetSdk=29` for Android 10 compatibility and `compileSdk=35` with runtime guards. On Android 10, scanning needs fine location permission and the system Location switch. On Android 12+, Nearby Devices permissions are requested at runtime. The app keeps scan data in memory until the user explicitly exports it through Android's document picker.
++
++## Safe operation
++
++Open the app, grant its requested permission, refresh capabilities, and select a lab test. Scanning stops at 30 seconds and stores at most 500 records. The advertising controls default to one legacy set, low-power mode, ultra-low transmit power, 30 seconds, and a one-second payload-change interval. Durations clamp to 5–120 seconds, intervals to 1–10 seconds. The emergency stop ends scanning, advertising and the app-owned GATT link. Leaving the app also stops scanning and advertising.
++
++The LAB advertisement uses service UUID `7f5f42d6-4659-4c15-9fe7-7de7a7033b01` and manufacturer test marker `LAB` with a one-byte sequence counter and optional four-byte ASCII tag under company ID `0xffff` (reserved test use). It is synthetic and non-connectable. API callback success shows stack acceptance, not a measured packet rate. Use a separate receiver for RF observations.
++
++The LAB marker is not a request to show a popup. Nearby devices display a
++message only when an explicitly installed, opt-in receiver understands this
++project UUID. The app does not impersonate pairing prompts or send arbitrary
++messages to uninstalled devices.
++
++See [device capabilities](reports/device-capabilities.md), [test results](reports/test-results.md), [capture workflow](research/capture.md), [transport reverse engineering](research/hardware-reverse-engineering.md), [Noise package inspection](research/noise-firmware.md), and [disconnect feasibility](reports/deauth-feasibility.md).
++
++## Cleanup
++
++```bash
++cd ~/m30-security-lab
++./scripts/cleanup.sh YOUR_ADB_SERIAL
++```
++
++Disable HCI snoop in Developer options if enabled, restart Bluetooth, and remove any exported files or private captures you no longer need. The scripts do not touch partitions, recovery, or SELinux.
+diff --git a/android/app/build.gradle.kts b/android/app/build.gradle.kts
+new file mode 100644
+index 0000000..7914c89
+--- /dev/null
++++ b/android/app/build.gradle.kts
+@@ -0,0 +1,37 @@
++import java.util.Properties
++
++plugins {
++    id("com.android.application")
++    id("org.jetbrains.kotlin.android")
++}
++val signingFile = rootProject.file("../host/toolchain/signing.properties")
++val labSigning = Properties().apply {
++    if (!signingFile.exists()) error("Run scripts/bootstrap-signing.sh before building")
++    signingFile.inputStream().use { load(it) }
++}
++android {
++    namespace = "org.cattail.m30lab"
++    compileSdk = 35
++    buildToolsVersion = "35.0.0"
++    defaultConfig {
++        applicationId = "org.cattail.m30lab"
++        minSdk = 23
++        targetSdk = 29
++        versionCode = 1
++        versionName = "0.1"
++    }
++    signingConfigs {
++        getByName("debug") {
++            storeFile = rootProject.file("../host/toolchain/m30-lab-debug.jks")
++            storePassword = labSigning.getProperty("storePassword")
++            keyAlias = "m30-lab-debug"
++            keyPassword = labSigning.getProperty("keyPassword")
++        }
++    }
++    compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
++    kotlinOptions { jvmTarget = "17" }
++}
++dependencies {
++    testImplementation("junit:junit:4.13.2")
++    testImplementation("org.json:json:20240303")
++}
+diff --git a/android/app/src/main/AndroidManifest.xml b/android/app/src/main/AndroidManifest.xml
+new file mode 100644
+index 0000000..a645c08
+--- /dev/null
++++ b/android/app/src/main/AndroidManifest.xml
+@@ -0,0 +1,14 @@
++<manifest xmlns:android="http://schemas.android.com/apk/res/android">
++    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
++    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
++    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
++    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
++    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
++    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
++    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
++    <application android:label="M30 Bluetooth Lab" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:usesCleartextTraffic="false">
++        <activity android:name=".MainActivity" android:exported="true">
++            <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
++        </activity>
++    </application>
++</manifest>
+diff --git a/android/app/src/main/java/org/cattail/m30lab/AdvParser.kt b/android/app/src/main/java/org/cattail/m30lab/AdvParser.kt
+new file mode 100644
+index 0000000..cbc119d
+--- /dev/null
++++ b/android/app/src/main/java/org/cattail/m30lab/AdvParser.kt
+@@ -0,0 +1,53 @@
++package org.cattail.m30lab
++
++import org.json.JSONArray
++import org.json.JSONObject
++import java.util.Locale
++
++object AdvParser {
++    fun hex(bytes: ByteArray?): String = bytes?.joinToString("") { "%02X".format(it.toInt() and 0xff) } ?: ""
++
++    fun parse(raw: ByteArray?): JSONObject {
++        val fields = JSONArray()
++        val out = JSONObject().put("rawHex", hex(raw)).put("fields", fields)
++        if (raw == null) return out.put("error", "No raw bytes")
++        var offset = 0
++        while (offset < raw.size) {
++            val length = raw[offset].toInt() and 0xff
++            if (length == 0) break
++            if (length < 1 || offset + 1 + length > raw.size) {
++                out.put("error", "Truncated AD structure at byte $offset")
++                break
++            }
++            val type = raw[offset + 1].toInt() and 0xff
++            val data = raw.copyOfRange(offset + 2, offset + 1 + length)
++            val item = JSONObject().put("type", type).put("dataHex", hex(data))
++            when (type) {
++                0x08, 0x09 -> item.put("name", String(data, Charsets.UTF_8))
++                0x0a -> if (data.isNotEmpty()) item.put("txPowerDbm", data[0].toInt())
++                0xff -> if (data.size >= 2) item.put("companyId", (data[0].toInt() and 0xff) or ((data[1].toInt() and 0xff) shl 8))
++                0x02, 0x03 -> item.put("uuid16", uuid16(data))
++                0x06, 0x07 -> item.put("uuid128Le", uuid128(data))
++            }
++            fields.put(item)
++            offset += length + 1
++        }
++        return out
++    }
++
++    private fun uuid16(data: ByteArray): JSONArray {
++        val values = JSONArray()
++        for (i in 0 until data.size - 1 step 2) values.put(String.format(Locale.US, "%04X", (data[i].toInt() and 0xff) or ((data[i + 1].toInt() and 0xff) shl 8)))
++        return values
++    }
++
++    private fun uuid128(data: ByteArray): JSONArray {
++        val values = JSONArray()
++        for (i in 0 until data.size - 15 step 16) {
++            val b = data.copyOfRange(i, i + 16).reversedArray()
++            val h = hex(b)
++            values.put("${h.substring(0, 8)}-${h.substring(8, 12)}-${h.substring(12, 16)}-${h.substring(16, 20)}-${h.substring(20)}")
++        }
++        return values
++    }
++}
+diff --git a/android/app/src/main/java/org/cattail/m30lab/GattLab.kt b/android/app/src/main/java/org/cattail/m30lab/GattLab.kt
+new file mode 100644
+index 0000000..9778c80
+--- /dev/null
++++ b/android/app/src/main/java/org/cattail/m30lab/GattLab.kt
+@@ -0,0 +1,145 @@
++package org.cattail.m30lab
++
++import android.app.Activity
++import android.bluetooth.BluetoothDevice
++import android.bluetooth.BluetoothGatt
++import android.bluetooth.BluetoothGattCallback
++import android.bluetooth.BluetoothGattCharacteristic
++import android.bluetooth.BluetoothGattDescriptor
++import android.bluetooth.BluetoothProfile
++import android.os.Handler
++import android.os.Looper
++import android.os.SystemClock
++import android.widget.Button
++import android.widget.EditText
++import android.widget.LinearLayout
++import android.widget.TextView
++import java.util.UUID
++
++class GattLab(private val activity: Activity, private val root: LinearLayout, private val log: (String) -> Unit) {
++    private val handler = Handler(Looper.getMainLooper())
++    private val cccd = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
++    private var selected: BluetoothDevice? = null
++    private var gatt: BluetoothGatt? = null
++    private var chosen: BluetoothGattCharacteristic? = null
++    private var cyclesRemaining = 0
++    private var totalCycles = 0
++    private var failures = 0
++    private var runStart = 0L
++    private var connectStart = 0L
++    private var generation = 0
++    private var discoveryDone = false
++    private val state = TextView(activity)
++    private val services = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
++    private val writeInput = EditText(activity).apply { hint = "Hex payload for selected characteristic (max 20 bytes)"; setSingleLine(true) }
++
++    init {
++        root.addView(state)
++        button("Connect selected peripheral") { connect(false) }
++        button("Discover services") { if (gatt?.discoverServices() != true) log("Service discovery request rejected") }
++        root.addView(services)
++        root.addView(writeInput)
++        button("Read selected characteristic") { chosen?.let { if (gatt?.readCharacteristic(it) != true) log("Read request rejected") } ?: log("Select a characteristic first") }
++        button("Write selected characteristic (preview and confirm)") { writeChosen() }
++        button("Subscribe selected notifications") { notification(true) }
++        button("Unsubscribe selected notifications") { notification(false) }
++        button("Disconnect local GATT link") { disconnect() }
++        button("Run 3 bounded connect / disconnect cycles") { startResilience() }
++        state.text = "No owned peripheral selected"
++    }
++    private fun button(label: String, click: () -> Unit) { root.addView(Button(activity).apply { text = label; setOnClickListener { click() } }) }
++    fun select(device: BluetoothDevice, name: String) { disconnect(); selected = device; state.text = "Selected: $name / ${device.address}"; services.removeAllViews() }
++    private val callback = object : BluetoothGattCallback() {
++        override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) { handler.post {
++            if (g !== gatt) return@post
++            log("GATT connection status=$status state=$newState latency=${SystemClock.elapsedRealtime() - connectStart}ms")
++            when (newState) {
++                BluetoothProfile.STATE_CONNECTED -> {
++                    if (!g.discoverServices()) { log("Discovery request failed"); if (cyclesRemaining > 0) failCycle() }
++                }
++                BluetoothProfile.STATE_DISCONNECTED -> {
++                    g.close(); if (gatt === g) gatt = null
++                    if (cyclesRemaining > 0) { cyclesRemaining--; if (status != BluetoothGatt.GATT_SUCCESS) failures++; nextCycle() }
++                }
++            }
++        } }
++        override fun onServicesDiscovered(g: BluetoothGatt, status: Int) { handler.post {
++            if (g !== gatt) return@post
++            discoveryDone = true
++            log("Service discovery status=$status count=${g.services.size}")
++            services.removeAllViews()
++            if (status == BluetoothGatt.GATT_SUCCESS) for (service in g.services) {
++                services.addView(TextView(activity).apply { text = "Service ${service.uuid}" })
++                for (c in service.characteristics) services.addView(Button(activity).apply {
++                    text = "Select ${c.uuid} properties=0x${c.properties.toString(16)} permissions=0x${c.permissions.toString(16)}"
++                    setOnClickListener { chosen = c; log("Characteristic selected ${c.uuid}") }
++                })
++            }
++            if (cyclesRemaining > 0) {
++                if (status != BluetoothGatt.GATT_SUCCESS) failures++
++                handler.postDelayed({ if (g === gatt) g.disconnect() }, 1000)
++            }
++        } }
++        override fun onCharacteristicRead(g: BluetoothGatt, c: BluetoothGattCharacteristic, status: Int) { handler.post { log("Read ${c.uuid} status=$status value=${AdvParser.hex(c.value)}") } }
++        override fun onCharacteristicWrite(g: BluetoothGatt, c: BluetoothGattCharacteristic, status: Int) { handler.post { log("Write ${c.uuid} status=$status") } }
++        override fun onCharacteristicChanged(g: BluetoothGatt, c: BluetoothGattCharacteristic) { handler.post { log("Notification ${c.uuid} value=${AdvParser.hex(c.value)}") } }
++        override fun onDescriptorWrite(g: BluetoothGatt, d: BluetoothGattDescriptor, status: Int) { handler.post { log("Descriptor write ${d.uuid} status=$status") } }
++    }
++    private fun connect(fromSequence: Boolean) {
++        val device = selected ?: run { log("Select an owned peripheral from scan results first"); return }
++        if (gatt != null) { log("A GATT link is already active"); return }
++        connectStart = SystemClock.elapsedRealtime()
++        discoveryDone = false
++        try {
++            gatt = device.connectGatt(activity, false, callback, BluetoothDevice.TRANSPORT_LE)
++            log("GATT connect requested to selected peripheral")
++            val ticket = generation
++            handler.postDelayed({ if (ticket == generation && gatt != null && !discoveryDone && SystemClock.elapsedRealtime() - connectStart >= 10_000) {
++                log("GATT connection/discovery timeout (10 s)"); failures++; gatt?.disconnect(); gatt?.close(); gatt = null
++                if (fromSequence && cyclesRemaining > 0) { cyclesRemaining--; nextCycle() }
++            } }, 10_000)
++        } catch (e: Exception) { log("GATT connect error ${e.javaClass.simpleName}: ${e.message}"); if (fromSequence) failCycle() }
++    }
++    private fun writeChosen() {
++        val c = chosen ?: run { log("Select a characteristic first"); return }
++        if (c.properties and (BluetoothGattCharacteristic.PROPERTY_WRITE or BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) == 0) { log("Selected characteristic is not writable"); return }
++        val value = writeInput.text.toString().replace(" ", "")
++        if (value.length > 40 || value.length % 2 != 0 || !value.matches(Regex("[0-9A-Fa-f]*"))) { log("Write input must be even-length hex, at most 20 bytes"); return }
++        val bytes = value.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
++        android.app.AlertDialog.Builder(activity).setTitle("Confirm intentional GATT write")
++            .setMessage("Characteristic ${c.uuid}\nPayload ${AdvParser.hex(bytes)} (${bytes.size} bytes)")
++            .setNegativeButton("Cancel", null).setPositiveButton("Write") { _, _ ->
++                c.writeType = if (c.properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0) BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT else BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
++                c.value = bytes
++                if (gatt?.writeCharacteristic(c) != true) log("Write request rejected") else log("Write requested: ${c.uuid} ${AdvParser.hex(bytes)}")
++            }.show()
++    }
++    private fun notification(enabled: Boolean) {
++        val c = chosen ?: run { log("Select a characteristic first"); return }
++        if (c.properties and (BluetoothGattCharacteristic.PROPERTY_NOTIFY or BluetoothGattCharacteristic.PROPERTY_INDICATE) == 0) { log("Selected characteristic has no notify/indicate property"); return }
++        val g = gatt ?: run { log("Connect first"); return }
++        if (!g.setCharacteristicNotification(c, enabled)) { log("Local notification request rejected"); return }
++        val d = c.getDescriptor(cccd) ?: run { log("No CCCD on characteristic"); return }
++        d.value = if (!enabled) BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE else if (c.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0) BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE else BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
++        if (!g.writeDescriptor(d)) log("CCCD write request rejected") else log("CCCD ${if (enabled) "subscribe" else "unsubscribe"} requested")
++    }
++    private fun startResilience() {
++        if (selected == null) { log("Select owned peripheral first"); return }
++        disconnect(); generation++; cyclesRemaining = 3; totalCycles = 3; failures = 0; runStart = SystemClock.elapsedRealtime()
++        val ticket = generation
++        handler.postDelayed({ if (ticket == generation && cyclesRemaining > 0) { log("Resilience hard deadline 45s"); finishResilience() } }, 45_000)
++        nextCycle()
++    }
++    private fun nextCycle() {
++        if (cyclesRemaining <= 0) { finishResilience(); return }
++        log("Resilience cycle ${totalCycles - cyclesRemaining + 1}/$totalCycles")
++        handler.postDelayed({ if (cyclesRemaining > 0 && gatt == null) connect(true) }, 500)
++    }
++    private fun failCycle() { cyclesRemaining--; failures++; gatt?.close(); gatt = null; nextCycle() }
++    private fun finishResilience() {
++        val done = totalCycles - cyclesRemaining
++        cyclesRemaining = 0; generation++; gatt?.disconnect(); gatt?.close(); gatt = null
++        log("Resilience complete: cycles=$done/$totalCycles failures=$failures elapsed=${SystemClock.elapsedRealtime() - runStart}ms")
++    }
++    fun disconnect() { cyclesRemaining = 0; generation++; gatt?.disconnect(); gatt?.close(); gatt = null; chosen = null }
++}
+diff --git a/android/app/src/main/java/org/cattail/m30lab/MainActivity.kt b/android/app/src/main/java/org/cattail/m30lab/MainActivity.kt
+new file mode 100644
+index 0000000..b61910c
+--- /dev/null
++++ b/android/app/src/main/java/org/cattail/m30lab/MainActivity.kt
+@@ -0,0 +1,270 @@
++package org.cattail.m30lab
++
++import android.Manifest
++import android.app.Activity
++import android.bluetooth.BluetoothAdapter
++import android.bluetooth.BluetoothDevice
++import android.bluetooth.BluetoothManager
++import android.bluetooth.le.AdvertiseCallback
++import android.bluetooth.le.AdvertiseData
++import android.bluetooth.le.AdvertiseSettings
++import android.bluetooth.le.ScanCallback
++import android.bluetooth.le.ScanResult
++import android.bluetooth.le.ScanSettings
++import android.content.Intent
++import android.content.pm.PackageManager
++import android.os.Build
++import android.os.Bundle
++import android.os.Handler
++import android.os.Looper
++import android.os.ParcelUuid
++import android.os.SystemClock
++import android.view.View
++import android.widget.Button
++import android.widget.EditText
++import android.widget.LinearLayout
++import android.widget.ScrollView
++import android.widget.Spinner
++import android.widget.ArrayAdapter
++import android.widget.TextView
++import org.json.JSONArray
++import org.json.JSONObject
++import java.text.SimpleDateFormat
++import java.util.Date
++import java.util.Locale
++import java.util.UUID
++
++class MainActivity : Activity() {
++    private val labUuid = UUID.fromString("7f5f42d6-4659-4c15-9fe7-7de7a7033b01")
++    private val handler = Handler(Looper.getMainLooper())
++    private val records = mutableListOf<JSONObject>()
++    private val seen = mutableMapOf<String, BluetoothDevice>()
++    private lateinit var adapter: BluetoothAdapter
++    private lateinit var root: LinearLayout
++    private lateinit var dashboard: TextView
++    private lateinit var logView: TextView
++    private lateinit var results: LinearLayout
++    private lateinit var inspection: TextView
++    private lateinit var uuidFilter: EditText
++    private lateinit var addressFilter: EditText
++    private lateinit var durationInput: EditText
++    private lateinit var intervalInput: EditText
++    private lateinit var messageInput: EditText
++    private lateinit var modeSpinner: Spinner
++    private lateinit var powerSpinner: Spinner
++    private lateinit var gattUi: GattLab
++    private var scanActive = false
++    private var scanDeadline: Runnable? = null
++    private var advActive = false
++    private var advGeneration = 0
++    private var advSequence = false
++    private var advCounter = 0
++    private var advDeadlineMillis = 0L
++    private var advIntervalMillis = 1000L
++    private var advCallback: AdvertiseCallback? = null
++    private val stamp = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.US)
++
++    override fun onCreate(state: Bundle?) {
++        super.onCreate(state)
++        adapter = (getSystemService(BLUETOOTH_SERVICE) as BluetoothManager).adapter
++        root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20, 20, 20, 20) }
++        val scroll = ScrollView(this).apply { addView(root) }
++        setContentView(scroll)
++        title("M30 Bluetooth Research Lab")
++        button("Refresh capabilities") { showCapabilities() }
++        button("Request required permissions") { requestLabPermissions() }
++        dashboard = text("")
++        title("Scanner and advertisement inspector")
++        uuidFilter = input("Lab service UUID filter (optional)", labUuid.toString())
++        addressFilter = input("Owned fixture address filter (optional)", "")
++        button("Start scan (30 s max)") { startScan() }
++        button("STOP SCAN") { stopScan("manual stop") }
++        button("Export scan JSON") { export("application/json", "scan.json", 1) }
++        button("Export scan CSV") { export("text/csv", "scan.csv", 2) }
++        results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
++        root.addView(results)
++        inspection = text("No advertisement inspected yet")
++        title("Synthetic LAB advertising")
++        text("UUID $labUuid • marker LAB • one legacy set • no automatic transmission")
++        durationInput = input("Duration seconds (5–120)", "30")
++        intervalInput = input("Payload change interval ms (1000–10000)", "1000")
++        messageInput = input("Optional LAB marker (max 4 ASCII bytes; not a popup)", "LAB")
++        modeSpinner = spinner(arrayOf("Low power", "Balanced", "Low latency"))
++        powerSpinner = spinner(arrayOf("Ultra low", "Low", "Medium", "High"))
++        button("Start single LAB advertisement") { startAdv(false) }
++        button("Start bounded LAB sequence") { startAdv(true) }
++        button("EMERGENCY STOP ALL LAB ACTIVITY") { stopEverything() }
++        title("Owned peripheral GATT and link resilience")
++        text("Select a scan result, then use explicit read/write/notify controls below. No automatic writes.")
++        gattUi = GattLab(this, root, ::log)
++        title("Event log")
++        logView = text("")
++        showCapabilities()
++    }
++
++    private fun title(value: String) { root.addView(TextView(this).apply { text = value; textSize = 20f; setPadding(0, 22, 0, 8) }) }
++    private fun text(value: String): TextView = TextView(this).also { it.text = value; it.textSize = 14f; root.addView(it) }
++    private fun button(value: String, click: () -> Unit) { root.addView(Button(this).apply { text = value; setOnClickListener { click() } }) }
++    private fun input(hint: String, value: String) = EditText(this).also { it.hint = hint; it.setSingleLine(true); it.setText(value); root.addView(it) }
++    private fun spinner(items: Array<String>) = Spinner(this).also { it.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, items); root.addView(it) }
++    private fun log(value: String) {
++        val line = "${stamp.format(Date())} $value"
++        android.util.Log.i("M30Lab", line)
++        logView.text = "$line\n${logView.text}".take(3500)
++    }
++
++    private fun requiredPermissions(): Array<String> = if (Build.VERSION.SDK_INT >= 31) arrayOf(
++        Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_ADVERTISE, Manifest.permission.BLUETOOTH_CONNECT
++    ) else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
++
++    private fun missingPermissions() = requiredPermissions().filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
++    private fun requestLabPermissions() {
++        val missing = missingPermissions()
++        if (missing.isEmpty()) log("All required runtime permissions granted") else requestPermissions(missing.toTypedArray(), 7)
++    }
++    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
++        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
++        log("Permission result: " + permissions.indices.joinToString { "${permissions[it]}=${grantResults.getOrNull(it) == PackageManager.PERMISSION_GRANTED}" })
++        showCapabilities()
++    }
++    private fun ready(action: String): Boolean {
++        val missing = missingPermissions()
++        if (missing.isNotEmpty()) { log("$action blocked: permission missing: $missing"); requestLabPermissions(); return false }
++        if (!adapter.isEnabled) { log("$action blocked: Bluetooth is off; enable it in Settings"); return false }
++        return true
++    }
++    private fun showCapabilities() {
++        val report = StringBuilder("Android ${Build.VERSION.RELEASE} / SDK ${Build.VERSION.SDK_INT}\n")
++        report.append("Permissions: ${requiredPermissions().joinToString { "$it=${checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED}" }}\n")
++        report.append("Radio enabled: ${adapter.isEnabled}; BLE feature: ${packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)}\n")
++        if (adapter.isEnabled && missingPermissions().isEmpty()) try {
++            report.append("Scanner: ${adapter.bluetoothLeScanner != null}; advertiser: ${adapter.bluetoothLeAdvertiser != null}\n")
++            report.append("Multiple advertising: ${adapter.isMultipleAdvertisementSupported}\n")
++            if (Build.VERSION.SDK_INT >= 26) report.append("Extended advertising: ${adapter.isLeExtendedAdvertisingSupported}; max data: ${adapter.leMaximumAdvertisingDataLength} bytes\n")
++            else report.append("Extended advertising: API unavailable\n")
++        } catch (e: Exception) { report.append("Capability query error: ${e.javaClass.simpleName}: ${e.message}\n") }
++        dashboard.text = report.toString()
++    }
++
++    private val scannerCallback = object : ScanCallback() {
++        override fun onScanResult(callbackType: Int, result: ScanResult) {
++            val address = result.device.address ?: "unknown"
++            val addressRule = addressFilter.text.toString().trim()
++            val uuidRule = uuidFilter.text.toString().trim()
++            if (addressRule.isNotEmpty() && !address.equals(addressRule, true)) return
++            if (uuidRule.isNotEmpty() && result.scanRecord?.serviceUuids?.none { it.uuid.toString().equals(uuidRule, true) } != false) return
++            val raw = result.scanRecord?.bytes
++            val parsed = AdvParser.parse(raw)
++            val name = result.scanRecord?.deviceName ?: result.device.name ?: ""
++            val item = JSONObject().put("time", stamp.format(Date())).put("address", address)
++                .put("addressType", "not exposed on Android ${Build.VERSION.SDK_INT}")
++                .put("name", name).put("rssi", result.rssi).put("rawHex", AdvParser.hex(raw))
++                .put("serviceUuids", JSONArray(result.scanRecord?.serviceUuids?.map { it.uuid.toString() } ?: emptyList<String>()))
++                .put("manufacturerData", JSONObject().apply {
++                    result.scanRecord?.manufacturerSpecificData?.let { data ->
++                        for (i in 0 until data.size()) put(data.keyAt(i).toString(), AdvParser.hex(data.valueAt(i)))
++                    }
++                }).put("parsed", parsed)
++            if (records.size >= 500) records.removeAt(0)
++            records.add(item)
++            inspection.text = item.toString(2)
++            if (!seen.containsKey(address)) {
++                seen[address] = result.device
++                results.addView(Button(this@MainActivity).apply {
++                    text = "Select $name [$address], RSSI ${result.rssi}"
++                    setOnClickListener { gattUi.select(result.device, name); inspection.text = item.toString(2); log("Selected owned peripheral $address") }
++                })
++            }
++            if (records.size % 10 == 1) log("Scan records ${records.size}; latest ${name.ifBlank { address }} RSSI ${result.rssi}")
++        }
++        override fun onScanFailed(errorCode: Int) { log("Scan failed callback code $errorCode"); stopScan("failure") }
++    }
++    private fun startScan() {
++        if (scanActive || !ready("scan")) return
++        val scanner = adapter.bluetoothLeScanner ?: run { log("Scanner unavailable"); return }
++        try {
++            records.clear(); seen.clear(); results.removeAllViews()
++            scanner.startScan(null, ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_POWER).build(), scannerCallback)
++            scanActive = true
++            scanDeadline = Runnable { stopScan("30-second deadline") }.also { handler.postDelayed(it, 30_000) }
++            log("Scan started; 30-second hard stop; records capped at 500")
++        } catch (e: Exception) { log("Scan start error ${e.javaClass.simpleName}: ${e.message}") }
++    }
++    private fun stopScan(reason: String) {
++        scanDeadline?.let(handler::removeCallbacks); scanDeadline = null
++        if (!scanActive) return
++        scanActive = false
++        try { adapter.bluetoothLeScanner?.stopScan(scannerCallback) } catch (e: Exception) { log("Scan stop error: ${e.message}") }
++        log("Scan stopped: $reason; ${records.size} records")
++    }
++
++    private fun advData(counter: Int): AdvertiseData {
++        val tag = messageInput.text.toString().toByteArray(Charsets.US_ASCII).filter { it in 0x20..0x7e }.take(4).toByteArray()
++        return AdvertiseData.Builder()
++        .addServiceUuid(ParcelUuid(labUuid))
++        .addManufacturerData(0xffff, byteArrayOf(0x4c, 0x41, 0x42, (counter and 0xff).toByte()) + tag)
++        .setIncludeDeviceName(false).setIncludeTxPowerLevel(false).build()
++    }
++    private fun advSettings(): AdvertiseSettings {
++        val modes = intArrayOf(AdvertiseSettings.ADVERTISE_MODE_LOW_POWER, AdvertiseSettings.ADVERTISE_MODE_BALANCED, AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
++        val powers = intArrayOf(AdvertiseSettings.ADVERTISE_TX_POWER_ULTRA_LOW, AdvertiseSettings.ADVERTISE_TX_POWER_LOW, AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM, AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
++        return AdvertiseSettings.Builder().setAdvertiseMode(modes[modeSpinner.selectedItemPosition])
++            .setTxPowerLevel(powers[powerSpinner.selectedItemPosition]).setConnectable(false).setTimeout(0).build()
++    }
++    private fun startAdv(sequence: Boolean) {
++        if (advActive || !ready("advertise")) return
++        if (adapter.bluetoothLeAdvertiser == null) { log("Advertiser unavailable"); return }
++        val duration = (durationInput.text.toString().toLongOrNull() ?: 30L).coerceIn(5L, 120L)
++        advIntervalMillis = (intervalInput.text.toString().toLongOrNull() ?: 1000L).coerceIn(1000L, 10000L)
++        advDeadlineMillis = SystemClock.elapsedRealtime() + duration * 1000
++        advSequence = sequence; advCounter = 0; advActive = true; advGeneration++
++        val generation = advGeneration
++        handler.postDelayed({ if (advGeneration == generation) stopAdv("hard deadline") }, duration * 1000)
++        log("LAB ${if (sequence) "sequence" else "single"} requested: ${duration}s, ${advIntervalMillis}ms, one set; callback is not RF proof")
++        issueAdvertise(generation)
++    }
++    private fun issueAdvertise(generation: Int) {
++        if (!advActive || generation != advGeneration || SystemClock.elapsedRealtime() >= advDeadlineMillis) { stopAdv("deadline before start"); return }
++        val callback = object : AdvertiseCallback() {
++            override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
++                if (!advActive || generation != advGeneration) { adapter.bluetoothLeAdvertiser?.stopAdvertising(this); return }
++                log("Advertising callback success, payload LAB ${advCounter}; mode ${settingsInEffect.mode}, power ${settingsInEffect.txPowerLevel}")
++                if (advSequence) handler.postDelayed({
++                    if (advActive && generation == advGeneration && SystemClock.elapsedRealtime() < advDeadlineMillis) {
++                        try { adapter.bluetoothLeAdvertiser?.stopAdvertising(this) } catch (_: Exception) {}
++                        advCallback = null; advCounter++; issueAdvertise(generation)
++                    }
++                }, advIntervalMillis)
++            }
++            override fun onStartFailure(errorCode: Int) { log("Advertising callback failure code $errorCode"); stopAdv("callback failure") }
++        }
++        advCallback = callback
++        try { adapter.bluetoothLeAdvertiser?.startAdvertising(advSettings(), advData(advCounter), callback) }
++        catch (e: Exception) { log("Advertising start error ${e.javaClass.simpleName}: ${e.message}"); stopAdv("exception") }
++    }
++    private fun stopAdv(reason: String) {
++        if (!advActive && advCallback == null) return
++        advActive = false; advGeneration++
++        advCallback?.let { try { adapter.bluetoothLeAdvertiser?.stopAdvertising(it) } catch (e: Exception) { log("Advertising stop error: ${e.message}") } }
++        advCallback = null
++        log("Advertising stopped: $reason")
++    }
++    private fun stopEverything() { stopScan("emergency stop"); stopAdv("emergency stop"); gattUi.disconnect(); log("All lab activity stopped") }
++
++    private fun export(type: String, filename: String, request: Int) {
++        if (records.isEmpty()) { log("No scan records to export"); return }
++        startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); this.type = type; putExtra(Intent.EXTRA_TITLE, filename) }, request)
++    }
++    @Deprecated("Uses Android 10 activity result API for compatibility")
++    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
++        super.onActivityResult(requestCode, resultCode, data)
++        if (resultCode != RESULT_OK || data?.data == null) return
++        try {
++            val content = if (requestCode == 1) ScanCodec.json(records) else ScanCodec.csv(records)
++            contentResolver.openOutputStream(data.data!!)?.use { it.write(content.toByteArray(Charsets.UTF_8)) }
++            log("Exported ${records.size} records")
++        } catch (e: Exception) { log("Export error ${e.message}") }
++    }
++    override fun onStop() { stopScan("activity stopped"); stopAdv("activity stopped"); super.onStop() }
++    override fun onDestroy() { stopEverything(); super.onDestroy() }
++}
+diff --git a/android/app/src/main/java/org/cattail/m30lab/ScanCodec.kt b/android/app/src/main/java/org/cattail/m30lab/ScanCodec.kt
+new file mode 100644
+index 0000000..ee8506c
+--- /dev/null
++++ b/android/app/src/main/java/org/cattail/m30lab/ScanCodec.kt
+@@ -0,0 +1,16 @@
++package org.cattail.m30lab
++
++import org.json.JSONArray
++import org.json.JSONObject
++
++object ScanCodec {
++    fun json(records: List<JSONObject>): String = JSONArray(records).toString(2)
++    fun csv(records: List<JSONObject>): String {
++        val header = "time,address,name,rssi,rawHex,parsedJson\n"
++        return header + records.joinToString("") { r ->
++            listOf("time", "address", "name", "rssi", "rawHex").joinToString(",") { quote(r.optString(it)) } +
++                "," + quote(r.optJSONObject("parsed")?.toString() ?: "") + "\n"
++        }
++    }
++    private fun quote(value: String) = "\"${value.replace("\"", "\"\"")}\""
++}
+diff --git a/android/app/src/test/java/org/cattail/m30lab/CodecTest.kt b/android/app/src/test/java/org/cattail/m30lab/CodecTest.kt
+new file mode 100644
+index 0000000..0c8e87d
+--- /dev/null
++++ b/android/app/src/test/java/org/cattail/m30lab/CodecTest.kt
+@@ -0,0 +1,26 @@
++package org.cattail.m30lab
++
++import org.json.JSONArray
++import org.json.JSONObject
++import org.junit.Assert.*
++import org.junit.Test
++
++class CodecTest {
++    @Test fun parsesValidAndTruncatedAdvertisement() {
++        val valid = byteArrayOf(5, 0xff.toByte(), 0xff.toByte(), 0xff.toByte(), 0x4c, 0x41, 0)
++        val parsed = AdvParser.parse(valid)
++        assertEquals(65535, parsed.getJSONArray("fields").getJSONObject(0).getInt("companyId"))
++        assertFalse(parsed.has("error"))
++        assertTrue(AdvParser.parse(byteArrayOf(5, 9, 65)).getString("error").contains("Truncated"))
++    }
++    @Test fun exportsQuoteAndRoundTrip() {
++        val item = JSONObject().put("time", "2026-10-26T00:00:00Z").put("address", "AA:BB")
++            .put("name", "LAB,\"fixture\"").put("rssi", -55).put("rawHex", "05FF")
++            .put("parsed", AdvParser.parse(byteArrayOf(2, 9, 65)))
++        val json = ScanCodec.json(listOf(item))
++        assertEquals("LAB,\"fixture\"", JSONArray(json).getJSONObject(0).getString("name"))
++        val csv = ScanCodec.csv(listOf(item))
++        assertTrue(csv.contains("\"LAB,\"\"fixture\"\"\""))
++        assertEquals(2, csv.trimEnd().lines().size)
++    }
++}
+diff --git a/android/build.gradle.kts b/android/build.gradle.kts
+new file mode 100644
+index 0000000..c7ad754
+--- /dev/null
++++ b/android/build.gradle.kts
+@@ -0,0 +1,4 @@
++plugins {
++    id("com.android.application") version "8.7.3" apply false
++    id("org.jetbrains.kotlin.android") version "2.0.21" apply false
++}
+diff --git a/android/gradle.properties b/android/gradle.properties
+new file mode 100644
+index 0000000..5cfd339
+--- /dev/null
++++ b/android/gradle.properties
+@@ -0,0 +1,3 @@
++org.gradle.jvmargs=-Xmx1536m -Dfile.encoding=UTF-8
++android.useAndroidX=true
++kotlin.code.style=official
+diff --git a/android/settings.gradle.kts b/android/settings.gradle.kts
+new file mode 100644
+index 0000000..09c8bc1
+--- /dev/null
++++ b/android/settings.gradle.kts
+@@ -0,0 +1,4 @@
++pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
++dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
++rootProject.name = "M30SecurityLab"
++include(":app")
+diff --git a/backups/README.md b/backups/README.md
+new file mode 100644
+index 0000000..4fb0ef6
+--- /dev/null
++++ b/backups/README.md
+@@ -0,0 +1 @@
++Local backups only. No backup or restore was performed by project creation.
+diff --git a/evidence/README.md b/evidence/README.md
+new file mode 100644
+index 0000000..afcfcbd
+--- /dev/null
++++ b/evidence/README.md
+@@ -0,0 +1 @@
++Local captures and raw evidence belong here and are excluded from Git. Redact identifiers before copying observations into reports.
+diff --git a/host/gatt_fixture.py b/host/gatt_fixture.py
+new file mode 100644
+index 0000000..fdc21a4
+--- /dev/null
++++ b/host/gatt_fixture.py
+@@ -0,0 +1,155 @@
++#!/usr/bin/env python3
++"""Bounded BlueZ GATT fixture for the owned M30 lab.
++
++Adapted to the project's two UUIDs from BlueZ's public D-Bus examples.
++No pairing, filesystem writes, or non-lab advertisement data.
++"""
++import argparse
++import dbus
++import dbus.service
++import dbus.mainloop.glib
++from gi.repository import GLib
++
++BLUEZ = "org.bluez"
++PROPS = "org.freedesktop.DBus.Properties"
++OM = "org.freedesktop.DBus.ObjectManager"
++SVC = "org.bluez.GattService1"
++CHR = "org.bluez.GattCharacteristic1"
++ADV = "org.bluez.LEAdvertisement1"
++SERVICE_UUID = "7f5f42d6-4659-4c15-9fe7-7de7a7033b01"
++CHAR_UUID = "7f5f42d6-4659-4c15-9fe7-7de7a7033b02"
++BASE = "/org/cattail/m30lab"
++
++
++class Properties(dbus.service.Object):
++    iface = ""
++
++    @dbus.service.method(PROPS, in_signature="s", out_signature="a{sv}")
++    def GetAll(self, interface):
++        if interface != self.iface:
++            raise dbus.exceptions.DBusException("Unknown interface")
++        return self.properties()
++
++
++class Service(Properties):
++    iface = SVC
++
++    def __init__(self, bus):
++        super().__init__(bus, BASE + "/service0")
++
++    def properties(self):
++        return {"UUID": dbus.String(SERVICE_UUID), "Primary": dbus.Boolean(True), "Characteristics": dbus.Array([dbus.ObjectPath(BASE + "/service0/char0")], signature="o")}
++
++
++class Characteristic(Properties):
++    iface = CHR
++
++    def __init__(self, bus):
++        super().__init__(bus, BASE + "/service0/char0")
++        self.value = bytearray(b"LAB")
++        self.notifying = False
++
++    def properties(self):
++        return {"UUID": dbus.String(CHAR_UUID), "Service": dbus.ObjectPath(BASE + "/service0"),
++                "Flags": dbus.Array(["read", "write", "notify"], signature="s"),
++                "Value": dbus.Array([dbus.Byte(x) for x in self.value], signature="y")}
++
++    @dbus.service.method(CHR, in_signature="a{sv}", out_signature="ay")
++    def ReadValue(self, options):
++        print("READ", bytes(self.value).hex(), flush=True)
++        return dbus.Array([dbus.Byte(x) for x in self.value], signature="y")
++
++    @dbus.service.method(CHR, in_signature="aya{sv}", out_signature="")
++    def WriteValue(self, value, options):
++        if len(value) > 20:
++            raise dbus.exceptions.DBusException("org.bluez.Error.InvalidValueLength")
++        self.value = bytearray(value)
++        print("WRITE", bytes(self.value).hex(), flush=True)
++        self.emit_value()
++
++    @dbus.service.method(CHR, in_signature="", out_signature="")
++    def StartNotify(self):
++        self.notifying = True
++        print("NOTIFY start", flush=True)
++        self.emit_value()
++
++    @dbus.service.method(CHR, in_signature="", out_signature="")
++    def StopNotify(self):
++        self.notifying = False
++        print("NOTIFY stop", flush=True)
++
++    @dbus.service.signal(PROPS, signature="sa{sv}as")
++    def PropertiesChanged(self, interface, changed, invalidated):
++        pass
++
++    def emit_value(self):
++        if self.notifying:
++            self.PropertiesChanged(CHR, {"Value": dbus.Array([dbus.Byte(x) for x in self.value], signature="y")}, [])
++
++
++class Application(dbus.service.Object):
++    def __init__(self, bus, service, characteristic):
++        super().__init__(bus, BASE)
++        self.service = service
++        self.characteristic = characteristic
++
++    @dbus.service.method(OM, out_signature="a{oa{sa{sv}}}")
++    def GetManagedObjects(self):
++        return {dbus.ObjectPath(BASE + "/service0"): {SVC: self.service.properties()},
++                dbus.ObjectPath(BASE + "/service0/char0"): {CHR: self.characteristic.properties()}}
++
++
++class Advertisement(Properties):
++    iface = ADV
++
++    def __init__(self, bus):
++        super().__init__(bus, BASE + "/advertisement0")
++
++    def properties(self):
++        return {"Type": dbus.String("peripheral"), "ServiceUUIDs": dbus.Array([SERVICE_UUID], signature="s"),
++                "Discoverable": dbus.Boolean(True), "Duration": dbus.UInt16(0), "Timeout": dbus.UInt16(0)}
++
++    @dbus.service.method(ADV, in_signature="", out_signature="")
++    def Release(self):
++        print("Advertisement released", flush=True)
++
++
++def main():
++    parser = argparse.ArgumentParser()
++    parser.add_argument("--seconds", type=int, default=90)
++    args = parser.parse_args()
++    seconds = max(10, min(args.seconds, 120))
++    dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
++    bus = dbus.SystemBus()
++    objects = dbus.Interface(bus.get_object(BLUEZ, "/"), OM).GetManagedObjects()
++    adapter_path = next((p for p, v in objects.items() if "org.bluez.GattManager1" in v and "org.bluez.LEAdvertisingManager1" in v), None)
++    if not adapter_path:
++        raise SystemExit("No BlueZ adapter with GATT and LE advertising managers")
++    service = Service(bus)
++    char = Characteristic(bus)
++    app = Application(bus, service, char)
++    adv = Advertisement(bus)
++    manager = dbus.Interface(bus.get_object(BLUEZ, adapter_path), "org.bluez.GattManager1")
++    advertiser = dbus.Interface(bus.get_object(BLUEZ, adapter_path), "org.bluez.LEAdvertisingManager1")
++    loop = GLib.MainLoop()
++    def fail(error):
++        print("Registration failed:", error, flush=True)
++        loop.quit()
++    def registered(_=None):
++        print("GATT registered; starting LAB advertisement", flush=True)
++        advertiser.RegisterAdvertisement(dbus.ObjectPath(BASE + "/advertisement0"), {},
++            reply_handler=lambda: print("LAB advertisement registered", flush=True), error_handler=fail)
++    manager.RegisterApplication(dbus.ObjectPath(BASE), {}, reply_handler=registered, error_handler=fail)
++    GLib.timeout_add_seconds(seconds, lambda: (loop.quit(), False)[1])
++    try:
++        loop.run()
++    finally:
++        try: advertiser.UnregisterAdvertisement(dbus.ObjectPath(BASE + "/advertisement0"))
++        except dbus.DBusException: pass
++        try: manager.UnregisterApplication(dbus.ObjectPath(BASE))
++        except dbus.DBusException: pass
++        print("LAB fixture stopped", flush=True)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/host/observe_lab.py b/host/observe_lab.py
+new file mode 100644
+index 0000000..3c0d8fa
+--- /dev/null
++++ b/host/observe_lab.py
+@@ -0,0 +1,75 @@
++#!/usr/bin/env python3
++"""Bounded BlueZ receiver check for this project's LAB advertisements.
++
++Reports distinct payload counter values observed in BlueZ's Device1 cache.
++This is not an over-the-air packet counter or a link-layer sniffer.
++"""
++import argparse
++import json
++import subprocess
++import time
++from datetime import datetime, timezone
++
++import dbus
++
++UUID = "7f5f42d6-4659-4c15-9fe7-7de7a7033b01"
++
++
++def main():
++    parser = argparse.ArgumentParser()
++    parser.add_argument("--seconds", type=int, default=35)
++    parser.add_argument("--output", default="")
++    args = parser.parse_args()
++    seconds = max(5, min(args.seconds, 120))
++    bus = dbus.SystemBus()
++    manager = dbus.Interface(bus.get_object("org.bluez", "/"), "org.freedesktop.DBus.ObjectManager")
++    scan = subprocess.Popen(
++        ["bluetoothctl", "--timeout", str(seconds), "scan", "le"],
++        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
++    )
++    seen = {}
++    first = None
++    polls = 0
++    start = time.monotonic()
++    try:
++        while time.monotonic() - start < seconds:
++            polls += 1
++            for _, interfaces in manager.GetManagedObjects().items():
++                dev = interfaces.get("org.bluez.Device1")
++                if not dev or UUID not in [str(v).lower() for v in dev.get("UUIDs", [])]:
++                    continue
++                for company, data in dev.get("ManufacturerData", {}).items():
++                    raw = bytes(data)
++                    if int(company) != 0xffff or not raw.startswith(b"LAB") or len(raw) < 4:
++                        continue
++                    counter = raw[3]
++                    tag = raw[4:].decode("ascii", errors="replace")
++                    if first is None:
++                        first = datetime.now(timezone.utc).isoformat()
++                    seen.setdefault(counter, {"firstSeenUtc": datetime.now(timezone.utc).isoformat(), "rssiDbm": int(dev.get("RSSI", 0)), "tag": tag})
++            time.sleep(0.2)
++    finally:
++        scan.terminate()
++        try:
++            scan.wait(timeout=3)
++        except subprocess.TimeoutExpired:
++            scan.kill()
++            scan.wait(timeout=3)
++    report = {
++        "receiver": "host BlueZ Device1 cache; not packet count",
++        "labServiceUuid": UUID,
++        "durationSeconds": seconds,
++        "polls": polls,
++        "firstMatchUtc": first,
++        "uniquePayloadCounters": sorted(seen),
++        "observations": seen,
++    }
++    output = json.dumps(report, indent=2)
++    if args.output:
++        with open(args.output, "w", encoding="utf-8") as handle:
++            handle.write(output + "\n")
++    print(output)
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/host/ui_tap.py b/host/ui_tap.py
+new file mode 100644
+index 0000000..6ca8565
+--- /dev/null
++++ b/host/ui_tap.py
+@@ -0,0 +1,44 @@
++#!/usr/bin/env python3
++"""ADB UI helper for repeatable, explicitly named lab controls."""
++import argparse
++import re
++import subprocess
++import xml.etree.ElementTree as ET
++
++
++def adb(serial, *args):
++    return subprocess.run(["adb", "-s", serial, *args], check=True, capture_output=True, timeout=12).stdout
++
++
++def nodes(serial):
++    adb(serial, "shell", "uiautomator", "dump", "/data/local/tmp/m30-lab-ui.xml")
++    xml = adb(serial, "exec-out", "cat", "/data/local/tmp/m30-lab-ui.xml")
++    return ET.fromstring(xml).iter("node")
++
++
++def main():
++    parser = argparse.ArgumentParser()
++    parser.add_argument("serial")
++    parser.add_argument("contains")
++    parser.add_argument("--direction", choices=["down", "up"], default="down")
++    parser.add_argument("--scrolls", type=int, default=8)
++    args = parser.parse_args()
++    for attempt in range(max(1, min(args.scrolls, 12))):
++        for node in nodes(args.serial):
++            value = node.attrib.get("text", "")
++            if args.contains.lower() not in value.lower() or not node.attrib.get("clickable") == "true":
++                continue
++            bounds = [int(x) for x in re.findall(r"\d+", node.attrib["bounds"])]
++            x, y = (bounds[0] + bounds[2]) // 2, (bounds[1] + bounds[3]) // 2
++            adb(args.serial, "shell", "input", "tap", str(x), str(y))
++            print(f"Tapped {args.contains!r} at ({x},{y}) after {attempt} scrolls")
++            return
++        if args.direction == "down":
++            adb(args.serial, "shell", "input", "swipe", "540", "1900", "540", "500", "250")
++        else:
++            adb(args.serial, "shell", "input", "swipe", "540", "400", "540", "1850", "250")
++    raise SystemExit(f"Control {args.contains!r} not found")
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/reports/command-log.md b/reports/command-log.md
+new file mode 100644
+index 0000000..7a00c71
+--- /dev/null
++++ b/reports/command-log.md
+@@ -0,0 +1,26 @@
++# Command and tool log
++
++Recorded 2026-10-26 (Asia/Kolkata). The ADB serial is intentionally omitted
++from tracked documentation. Full raw logs and screenshots remain ignored under
++`evidence/`.
++
++| Command or check | Result / exit code |
++| --- | --- |
++| `adb devices -l` | One handset; initially `unauthorized`, then `device` after the user accepted the debugging prompt |
++| `adb shell getprop` / targeted `uname`, `getenforce`, `df`, `dumpsys battery` | Baseline captured; see `reports/device-capabilities.md`; exit 0 |
++| `adb shell su -c 'zcat /proc/config.gz'` targeted SCSC/BT read | Exit 0; `CONFIG_SCSC_BT=y`, `CONFIG_BT` unset, SCSC BlueZ path unset |
++| Targeted `/vendor` library pulls, `sha256sum`, `readelf`, `strings` | Exit 0; hashes and transport strings recorded in `research/hardware-reverse-engineering.md` |
++| `adb shell dumpsys bluetooth_manager` and package feature queries | Exit 0; Android framework Bluetooth service and BLE feature present |
++| Host `adb version` | Android Debug Bridge 34.0.5 |
++| Host `bluetoothctl --version` | BlueZ 5.85 |
++| Host `wireshark --version` | Wireshark 4.6.4 |
++| Host `git --version` | Git 2.53.0 |
++| `./scripts/bootstrap-toolchain.sh` | Exit 0; Gradle 8.10.2, JDK 21.0.13, Android platform/build tools 35 installed under ignored project-local toolchain |
++| Gradle `testDebugUnitTest` | Exit 0; parser malformed-input and JSON/CSV export tests passed |
++| `./scripts/build.sh` | Exit 0; latest debug APK SHA-256 `dad854a9290f21cebd204bca8fe9c8f9dcf6f8c48c74a80840dea6e1f9fbae0d` |
++| `./scripts/install.sh <serial>` | Exit 0; `Success`; package `org.cattail.m30lab` installed with project signing key |
++| App scanner / advertiser / GATT fixture runs | See `reports/test-results.md`; all bounded deadlines and callback logs captured |
++| Noise package paths, `dumpsys package`, APK pull, `aapt dump`, `dexdump` | Exit 0; static result in `research/noise-firmware.md` |
++
++The host fixture and receiver use bounded timeouts. ADB helper commands use
++explicit `timeout` wrappers where a device or UI operation could hang.
+diff --git a/reports/deauth-feasibility.md b/reports/deauth-feasibility.md
+new file mode 100644
+index 0000000..01f8384
+--- /dev/null
++++ b/reports/deauth-feasibility.md
+@@ -0,0 +1,27 @@
++# Bluetooth disconnect feasibility
++
++The term “Bluetooth deauth” is too broad for a single command or capability.
++
++| Scenario | Finding for this lab |
++| --- | --- |
++| End an app-owned GATT connection | Feasible through `BluetoothGatt.disconnect()`. This ends only the link established by this app. The app logs connection state and status. |
++| Measure reconnection of an owned peripheral | Implemented as three bounded connect/disconnect cycles after explicit fixture selection. Results are recorded in the test report. |
++| End a link between two other devices | No generic method is supported by the Android app or observed internal interface. The Bluetooth SIG HCI Disconnect command refers to an existing connection handle on the local controller, not an arbitrary third-party link. No third-party disconnect was tested. |
++| Vulnerability-based disruption | Unknown until a specific owned target, firmware/version, advisory and prerequisites are identified. No exploit was selected or run. |
++| RF interference or jamming | In principle, sufficient interference can degrade a radio link, including links between other devices. It is not a universal Bluetooth disconnect command, cannot guarantee every link in an area will drop, and cannot be delivered as a controlled feature of the observed M30 Android Bluetooth API. No interference generator was implemented or tested. A separate, instrumented RF setup would be required to establish an effect on the owned earbud link. |
++
++The handset's `CONFIG_BT` is unset and `CONFIG_SCSC_BT_BLUEZ` is off. Its observed route is Android framework → vendor HAL → `/dev/scsc_h4_0` → SCSC controller. Root alone does not add an AF_BLUETOOTH socket or a Linux HCI controller. The project therefore does not supply a fabricated “deauth” command. The [Bluetooth SIG HCI specification](https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core_v6.3/out/en/host-controller-interface/host-controller-interface-functional-specification.html) defines HCI Disconnect with a local connection handle; [Android BluetoothGatt.disconnect()](https://developer.android.com/reference/android/bluetooth/BluetoothGatt#disconnect()) applies to the app's GATT link. The [M30-family source Kconfig](https://github.com/akhil1999/android_kernel_samsung_m30lte/blob/095206579f69121278ed1dd5fd0d7975c0705c6a/drivers/misc/samsung/scsc_bt/Kconfig) describes the optional BlueZ path. The running config, rather than that repository alone, establishes this handset's disabled path.
++
++Ownership of all nearby devices permits controlled testing but does not change the controller's command semantics. The earbud/host models and firmware were not supplied, so no vulnerability-specific claim can be made. Even with an external raw link-layer radio or sniffer, disrupting an unrelated connection requires a demonstrated target-specific mechanism and verification. A generic “works on every Bluetooth connection” result is unsupported.
++
++## Nearby popup or custom message request
++
++The phone can broadcast a synthetic LAB marker and can exchange a message with
++an explicitly selected, cooperating GATT fixture. It cannot make arbitrary
++nearby Android, iOS, earbud, or computer devices display a custom popup. A
++Bluetooth advertisement is data for a scanner; the receiving operating system
++decides whether to show anything. Triggering a popup on an uninstalled or
++non-consenting receiver would require a product-specific protocol, pairing
++workflow, or vulnerability. The app therefore has no popup-spam or pairing
++impersonation mode. A safe extension is an opt-in receiver app or fixture that
++recognizes the project UUID and renders a clearly labeled LAB message.
+diff --git a/reports/device-capabilities.md b/reports/device-capabilities.md
+new file mode 100644
+index 0000000..abd82c7
+--- /dev/null
++++ b/reports/device-capabilities.md
+@@ -0,0 +1,41 @@
++# Device and host baseline — 2026-10-26 (Asia/Kolkata)
++
++## Observed on the attached handset
++
++One ADB device was initially `unauthorized`; after the user accepted USB debugging it was the sole `device` transport. Subsequent ADB commands were pinned to that serial. The serial and Bluetooth addresses are excluded here.
++
++| Item | Observation |
++| --- | --- |
++| Manufacturer/model/codename | Samsung SM-M305F / `m30lte` (`m30ltedd` product) |
++| Board/platform | `exynos7904` / `universal7904` |
++| Running OS | Android 10, SDK 29; regular Android shell, not recovery |
++| Firmware fingerprint | `samsung/m30ltedd/m30lte:10/QP1A.190711.020/M305FDDS8CVB2:user/release-keys` |
++| Security patch | 2022-03-01 |
++| Bootloader reported | `M305FDDS8CVB2`, revision 4; verified boot state `orange` |
++| Kernel | `4.4.177-22392479 #1 SMP PREEMPT Mon Feb 21 17:10:33 KST 2022 aarch64` |
++| ABIs | `arm64-v8a, armeabi-v7a, armeabi` |
++| Root/SELinux | Magisk `30.7:MAGISKSU`, root command succeeded; SELinux Enforcing |
++| Storage/battery | `/data` ~43 GiB free of 53 GiB; battery 100%, charging at inventory |
++| Bluetooth at discovery | Off; airplane mode on |
++| Bluetooth after user action | On; airplane mode off |
++| Package features | `android.hardware.bluetooth`, `android.hardware.bluetooth_le` |
++| SCSC | `/dev/scsc_h4_0` owned by `bluetooth`; `/dev/scsc_ant_0` present; vendor Bluetooth HAL 1.0 service running |
++| Kernel config | `CONFIG_SCSC_BT=y`, `# CONFIG_SCSC_BT_BLUEZ is not set`, `# CONFIG_BT is not set` (read from `/proc/config.gz` as root) |
++| Firmware property | `vendor.bluetooth_fw_ver=UTC|lassen_s612|S612_E788X_C1_Y21W42A` |
++
++The user reports TWRP is installed, but recovery was **not booted or verified** during this task. No partition backup was taken. The fingerprint, bootloader version, kernel build and firmware property above are rollback planning inputs, not a tested restore path.
++
++## Host and interfaces
++
++The laptop has ADB 34.0.5, BlueZ 5.85, Wireshark 4.6.4, Git 2.53.0, `lsusb`, `btmon`, `btmgmt`, and a built-in Realtek USB Bluetooth controller VID:PID `0bda:b86a` bound to `btusb`. BlueZ reports central/peripheral roles. This is a separate laptop receiver, not a USB adapter plugged into the phone. No external Bluetooth USB controller was found on the phone. At discovery, no usable Android SDK/JDK/Gradle was present on the host PATH; the project-local toolchain was fetched for the build. The host had ~2.7 GiB free initially, so captures and toolchain archives are excluded from Git.
++
++## Access layers
++
++| Layer | Current result |
++| --- | --- |
++| Android framework | BLE package feature and app API access present; actual advertiser/scanner callbacks recorded separately in test results |
++| Android vendor HAL | `android.hardware.bluetooth@1.0-service` running; `libbt-vendor.so` contains `/dev/scsc_h4_0` and an H4 open-failure string |
++| Linux AF_BLUETOOTH/HCI | `CONFIG_BT` is absent and SCSC BlueZ option is off; no `hci0` on the handset was observed |
++| External USB controller | None attached to handset; support and power budget untested |
++
++Android Bluetooth operating through the vendor HAL does not imply that BlueZ can open an internal `hci0`. No attempt was made to give Android and BlueZ concurrent ownership of the controller.
 diff --git a/reports/test-results.md b/reports/test-results.md
-index e9ffabc..5c5df96 100644
---- a/reports/test-results.md
+new file mode 100644
+index 0000000..5c5df96
+--- /dev/null
 +++ b/reports/test-results.md
-@@ -74,5 +74,12 @@ and cleanup in `onStop`, `onDestroy`, timeout, and error paths. No HCI snoop log
- was collected because the device-side Developer Options toggle requires a
- physical user action. The exact workflow is in `research/capture.md`.
- 
+@@ -0,0 +1,85 @@
++# Test results
++
++Date: 2026-10-26 (Asia/Kolkata). Device identifiers and unrelated discovered
++device data are omitted. Raw screenshots, receiver logs, and copied libraries
++are in ignored `evidence/` for local review.
++
++## Build and install
++
++| Command | Exit/result |
++| --- | --- |
++| `./scripts/bootstrap-toolchain.sh` | Completed; project-local Gradle 8.10.2, JDK 21.0.13, Android platform/build tools 35 |
++| `.../gradle --no-daemon testDebugUnitTest` | `BUILD SUCCESSFUL`; parser truncation and JSON/CSV quoting tests passed |
++| `./scripts/build.sh` | `BUILD SUCCESSFUL` |
++| `./scripts/install.sh <pinned serial>` | `Success`; package `org.cattail.m30lab` installed without replacing an unrelated package |
++| latest APK SHA-256 | `dad854a9290f21cebd204bca8fe9c8f9dcf6f8c48c74a80840dea6e1f9fbae0d` |
++
++The app was launched from ADB. It does not contain a boot receiver and did not
++start RF transmission on install or launch.
++
++## Android capability and scanning
++
++The dashboard reported Android 10 / SDK 29, the required location permission
++granted, Bluetooth enabled, BLE scanner available, advertiser available,
++multiple advertising supported, extended advertising unsupported, and maximum
++advertising data length 31 bytes. Earlier inventory also observed the expected
++permission prompt and the Bluetooth-disabled dashboard state.
++
++The app scan ran for its 30-second hard deadline and stopped automatically after
++4 records in the live lab. A synthetic host fixture advertisement was parsed
++with its 128-bit LAB service UUID and raw bytes. Scan data is bounded at 500
++records and remains in memory until an explicit JSON or CSV document export.
++
++## Advertising and independent receiver
++
++The single advertisement run logged `AdvertiseCallback.onStartSuccess` with the
++selected low-power/ultra-low settings and stopped at its 30-second deadline.
++The separate laptop BlueZ receiver saw the LAB service and marker during the
++run. The bounded sequence run produced stack callbacks for synthetic counters
++0 through 27 and stopped at its 30-second deadline. The receiver's BlueZ
++Device1 cache observed counters `[0, 2, 4, 17]` with RSSIs in the mid -60 dBm
++range. BlueZ cache observations are deduplicated; they do not establish packet
++rate, packet loss, or exact over-the-air timing. The app reports this limitation
++in its event log.
++
++The current UI also accepts an optional four-byte printable LAB tag. It is
++encoded in the synthetic manufacturer field for an opt-in receiver to inspect;
++it is labeled as a broadcast marker and cannot cause a popup on a device that
++has no cooperating receiver.
++
++After this tag change, a fresh 35-second host receiver run observed counter 0
++with tag `LAB` at approximately -62 dBm. The phone callback accepted the
++advertisement, and leaving the activity triggered the app's cleanup path.
++
++## GATT fixture
++
++The host fixture is a bounded BlueZ D-Bus peripheral using the project LAB UUID
++and a read/write/notify characteristic. The phone scan found four fixture
++records. One measured app-owned connection returned status 0 / connected state
++2 with approximately 1875 ms connection latency. Service discovery returned
++status 0 and five services. The selected LAB characteristic read returned
++status 0 and value `4C4142`; the fixture log recorded `READ 4c4142`.
++
++A deliberate write preview of `414243` reached the phone API but returned status
++1 after the corresponding fixture process had expired, so it is recorded as a
++failed/fixture-timing case rather than a successful write. No characteristic is
++written automatically. Notification and the three-cycle resilience control are
++implemented, but a complete independent notification/resilience measurement was
++not completed before the fixture deadline; they remain explicitly untested.
++
++## Negative and cleanup checks
++
++The app has hard deadlines, explicit stop buttons, callback failure handling,
++and cleanup in `onStop`, `onDestroy`, timeout, and error paths. No HCI snoop log
++was collected because the device-side Developer Options toggle requires a
++physical user action. The exact workflow is in `research/capture.md`.
++
 +After revoking `ACCESS_FINE_LOCATION`, pressing Start Scan logged a permission
 +missing block; the permission was granted again afterward. The phone was
 +initially inventoried with Bluetooth off and the dashboard displayed the off
@@ -13,5 +1229,365 @@ index e9ffabc..5c5df96 100644
 +not change the service state, so the button-level Bluetooth-off block was not
 +independently exercised; Bluetooth was left enabled.
 +
- The project did not flash partitions, wipe data, change the bootloader, replace
- recovery, install a kernel, disable SELinux, or attempt RF interference.
++The project did not flash partitions, wipe data, change the bootloader, replace
++recovery, install a kernel, disable SELinux, or attempt RF interference.
+diff --git a/research/capture.md b/research/capture.md
+new file mode 100644
+index 0000000..705e9f2
+--- /dev/null
++++ b/research/capture.md
+@@ -0,0 +1,11 @@
++# HCI capture workflow
++
++On this Android 10 build, `/data/misc/bluetooth/logs` exists but was empty at inventory. HCI snoop logging was not enabled by this project.
++
++1. On the phone, open **Settings → Developer options → Enable Bluetooth HCI snoop log** and turn it on. Restart Bluetooth for logging to take effect. Reproduce only a bounded lab run.
++2. Inspect filenames with `adb -s SERIAL shell 'su -c "ls -l /data/misc/bluetooth/logs"'`. Do not dump the whole Bluetooth service history into a report.
++3. If a `btsnoop_hci.log` file appears, copy it privately with `adb -s SERIAL exec-out su -c 'cat /data/misc/bluetooth/logs/btsnoop_hci.log' > evidence/btsnoop_hci.log`. Check its size and use `wireshark evidence/btsnoop_hci.log`, filtering for LE advertising commands/events and the LAB UUID or marker.
++4. If the build writes only in-memory snoop events, collect a targeted bug report and use AOSP's `btsnooz.py` extraction workflow. Keep that report private; it can contain personal data.
++5. Turn the Developer options toggle off and restart Bluetooth afterward.
++
++HCI snoop records the phone host/controller interface. It is not a promiscuous over-the-air capture of unrelated links. A separate owned BLE receiver or purpose-built sniffer is needed for independent RF confirmation. The laptop's `btusb` receiver can confirm received advertisements; it is not a raw link-layer sniffer for other connections. See [AOSP Bluetooth verification and debugging](https://source.android.com/docs/core/connect/bluetooth/verifying_debugging).
+diff --git a/research/hardware-reverse-engineering.md b/research/hardware-reverse-engineering.md
+new file mode 100644
+index 0000000..ae10fa3
+--- /dev/null
++++ b/research/hardware-reverse-engineering.md
+@@ -0,0 +1,87 @@
++# Hardware and transport reverse engineering
++
++Date: 2026-10-26 (Asia/Kolkata)
++
++This note records a bounded, read-only inspection of the installed Android
++Bluetooth stack. The handset was not modified, its firmware was not patched,
++and no raw HCI command was injected.
++
++## Observed transport
++
++The running phone exposes `/dev/scsc_h4_0` and `/dev/scsc_ant_0`. The first node
++is owned by the `bluetooth` group. A vendor HIDL service named
++`android.hardware.bluetooth@1.0-service` is running. The copied, hashed vendor
++objects are in ignored local evidence:
++
++| Object | Result |
++| --- | --- |
++| `/vendor/lib64/hw/android.hardware.bluetooth@1.0-impl.so` | AArch64 ELF; SHA-256 `0e68668c2367f18a6eb150e606402425c1c323584b5ae8629f218870f35dbe27` |
++| `/vendor/lib64/libbt-vendor.so` | AArch64 ELF; SHA-256 `57d60dd2f2ee3bdfe5e13b8dc3c1b56dce0bc60feeb5b7f55a756d7698561cdb` |
++
++The HIDL implementation exports the standard `IBluetoothHci` methods,
++including `sendHciCommand`, `sendAclData`, `initialize`, and `close`. Its
++symbols also show `H4Protocol`, `MctProtocol`, `VendorInterface::Open`, and
++`VendorInterface::Send`. This establishes a standard framework-to-HAL HCI
++boundary; it does not grant ordinary applications a privileged HCI socket.
++
++The vendor library strings reference `/dev/scsc_h4_0`,
++`/mnt/vendor/efs/bluetooth/bt_addr`, `vendor.bluetooth_fw_ver`, and
++`/sys/module/scsc_bt/parameters/bluetooth_address`. It also contains the
++diagnostic string `Open h4 device failed`. These strings, the live device node,
++and the running service make the Android framework → vendor HIDL → SCSC H4
++character device path an observation on this build.
++
++The root shell reported:
++
++```
++# CONFIG_BT is not set
++CONFIG_SCSC_BT=y
++# CONFIG_SCSC_BT_BLUEZ is not set
++```
++
++No `/sys/module/scsc_bt/parameters` files were present in the read-only query,
++and no `hci0` or other Linux Bluetooth controller was present. The absence of
++AF_BLUETOOTH is therefore explained by the running kernel configuration and
++does not imply that the internal radio is missing.
++
++## Matching source comparison
++
++The public M30-family kernel tree
++[`akhil1999/android_kernel_samsung_m30lte`](https://github.com/akhil1999/android_kernel_samsung_m30lte/tree/095206579f69121278ed1dd5fd0d7975c0705c6a)
++at revision `095206579f69121278ed1dd5fd0d7975c0705c6a` contains
++`drivers/misc/samsung/scsc_bt/`, `drivers/misc/samsung/scsc/`, and
++`drivers/net/wireless/scsc/`. Its SCSC Bluetooth Kconfig has an optional
++`SCSC_BT_BLUEZ` path. The exact Samsung source package for the installed
++`M305FDDS8CVB2` firmware was not identified in Samsung's public release search,
++so this repository is a family comparison, not proof of an exact source match.
++
++The source comparison explains why a future custom kernel could expose a
++BlueZ/HCI path, but that would be a new kernel and controller ownership model.
++This task deliberately did not install or build one. Directly opening the H4
++character device while Android owns the HAL would race the system transport and
++is not a safe capability addition.
++
++## REA decision
++
++The official [morluto/rea repository](https://github.com/morluto/rea) was read
++at revision `1173c0a9dc1b352a60943a491462294db8f353ae`. Its README and security
++instructions were reviewed. REA was not installed or invoked: the live node,
++kernel configuration, ELF symbols, and strings resolved the transport question
++without needing binary decompilation. No private binary was modified. The
++copied objects remain traceable by path, hash, and build association in local
++ignored evidence.
++
++## Capability conclusion
++
++Reverse engineering found a privileged standard HCI command boundary inside the
++HAL, but no additional supported interface for an application, no Linux HCI
++controller, and no controller feature that addresses another device's existing
++connection. A direct HCI Disconnect command would require a connection handle
++owned by this controller. It cannot be turned into an area-wide disconnect or a
++popup sender by calling the HAL.
++
++Potential future research that is technically meaningful is limited to a
++separate, offline-matched kernel/HAL build or a second external controller with
++documented raw-HCI support. Neither should be introduced by replacing the
++phone's kernel or by sharing its internal controller with BlueZ during this
++project.
+diff --git a/research/noise-firmware.md b/research/noise-firmware.md
+new file mode 100644
+index 0000000..54b2bef
+--- /dev/null
++++ b/research/noise-firmware.md
+@@ -0,0 +1,61 @@
++# Noise package inspection
++
++Date: 2026-10-26 (Asia/Kolkata). This is a static inspection only. The Noise
++packages were not modified, repackaged, or invoked by this project.
++
++## Artifact found on the phone
++
++The handset contains two packages matching the requested name:
++
++| Package | Observation |
++| --- | --- |
++| `com.noise.audio.firmwarelab` | Version 1.0, target SDK 28, one exported `ProbeActivity`, `INTERNET` permission only |
++| `com.noise.audio` | Version 2.2.8 (version code 228), target SDK 36; the installed Noise audio application; requests Bluetooth scan/advertise/connect, location, notifications, and other app features |
++
++The firmware-lab base APK was copied from its installed path to ignored local
++evidence and hashed:
++
++```
++evidence/noise-static/firmwarelab.apk
++SHA-256 279fba9466633158c2c82b5f8dd3f663f6c4c2f5c07b6e66c6c2ca3b79bd7e0a
++```
++
++The APK manifest identifies its label as `Noise Firmware Lab` and its activity
++as `com.noise.audio.firmwarelab.ProbeActivity`. It has no Bluetooth, location,
++notification, or foreground-service permission. It cannot advertise, scan, or
++send a Bluetooth popup on this handset.
++
++## What the firmware-lab code does
++
++The decoded `ProbeActivity.lookup(int, String, String)` method constructs a
++JSON request and makes a TLS URL connection to:
++
++```
++https://app.gonoise.com/core/audio/firmware-versions
++```
++
++It uses HTTP POST, 20-second connect/read timeouts, JSON content type, and
++headers for a model/version/platform/firmware lookup. The embedded screen text
++describes this as a “simulated device” and says it sends the firmware API
++request “without Bluetooth”. The response is written to the app's external
++files directory as `firmware-response.json` and summarized in the local UI.
++
++This is a firmware-version lookup probe, not earbud firmware and not a popup
++transport. Its use of `PopupWindow` or Android `Message` classes in unrelated
++library code is ordinary local UI/worker behavior; it is not a mechanism for
++making another device display a message.
++
++## Noise audio application
++
++The installed `com.noise.audio` package requests Bluetooth permissions and has a
++`NotificationListenerService` protected by Android's
++`BIND_NOTIFICATION_LISTENER_SERVICE`. Those permissions allow the app to manage
++an owned audio accessory and observe notifications on the phone after the user
++grants access. They do not provide a protocol for causing arbitrary nearby
++devices to show a popup. A target device would have to run a cooperating
++receiver or expose a product-specific vulnerable protocol.
++
++No firmware binary, controller patch, or over-the-air popup implementation was
++present in the package inspected. The result is therefore a negative finding:
++Noise's installed firmware-lab logic cannot supply the requested universal
++popup capability, and it does not change the M30 deauth conclusion.
+diff --git a/research/sources.md b/research/sources.md
+new file mode 100644
+index 0000000..46e3ef8
+--- /dev/null
++++ b/research/sources.md
+@@ -0,0 +1,21 @@
++# Primary sources and claim status
++
++Checked 2026-10-26.
++
++| Source | Use | Status |
++| --- | --- | --- |
++| [Android BluetoothAdapter API](https://developer.android.com/reference/android/bluetooth/BluetoothAdapter) | scanner/advertiser availability, multi-advertising and extended advertising API guards | API documentation; measured values are on the handset |
++| [Android BluetoothLeAdvertiser API](https://developer.android.com/reference/android/bluetooth/BluetoothLeAdvertiser) | callback/error semantics and legacy advertisement limits | API documentation; callback success is not an RF measurement |
++| [Android Bluetooth permissions](https://developer.android.com/develop/connectivity/bluetooth/bt-permissions) | Android 10 location and Android 12 Nearby Devices permission rules | API guidance; app targets SDK 29 for this handset |
++| [AOSP Bluetooth verification/debugging](https://source.android.com/docs/core/connect/bluetooth/verifying_debugging) | HCI snoop enablement, storage path, bug-report extraction | current AOSP documentation; device still requires user toggle |
++| [Bluetooth SIG Core HCI specification](https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core_v6.3/out/en/host-controller-interface/host-controller-interface-functional-specification.html) | HCI Disconnect takes a local connection handle | primary protocol specification; interpretation applied to this HAL boundary |
++| [BlueZ LEAdvertisement documentation](https://github.com/bluez/bluez/blob/master/doc/org.bluez.LEAdvertisement.rst) | host fixture advertisement semantics | official BlueZ source documentation |
++| [BlueZ example GATT server](https://github.com/bluez/bluez/blob/master/test/example-gatt-server) | bounded fixture structure | official BlueZ example; this project's fixture is a small lab-specific adaptation |
++| [Samsung Open Source Release Center](https://opensource.samsung.com/) | exact kernel/source lookup | public portal checked; exact installed firmware source match remains unknown |
++| [M30-family kernel tree](https://github.com/akhil1999/android_kernel_samsung_m30lte/tree/095206579f69121278ed1dd5fd0d7975c0705c6a) | SCSC path comparison | public family source, not confirmed exact build |
++| [Kali NetHunter Bluetooth Arsenal](https://www.kali.org/docs/nethunter/nethunter-btarsenal/) | external/raw-controller requirements | official NetHunter documentation; no requirement demonstrated here |
++| [REA repository](https://github.com/morluto/rea) and [REA security policy](https://github.com/morluto/rea/security) | reverse-engineering workflow and handling boundary | official repository read; not installed or invoked |
++
++The attached research document's citation markers were not treated as evidence.
++Claims in the reports are labeled as observed, source-supported, inferred, or
++unknown where that distinction affects the conclusion.
+diff --git a/scripts/bootstrap-signing.sh b/scripts/bootstrap-signing.sh
+new file mode 100755
+index 0000000..a0003a2
+--- /dev/null
++++ b/scripts/bootstrap-signing.sh
+@@ -0,0 +1,19 @@
++#!/usr/bin/env bash
++set -euo pipefail
++base="$(cd "$(dirname "$0")/.." && pwd)"
++dir="$base/host/toolchain"
++mkdir -p "$dir"
++props="$dir/signing.properties"
++store="$dir/m30-lab-debug.jks"
++if [[ -e "$props" || -e "$store" ]]; then
++  [[ -f "$props" && -f "$store" ]] || { echo "Incomplete signing state; inspect $dir" >&2; exit 1; }
++  echo "Existing project signing key retained"
++  exit 0
++fi
++password="$(openssl rand -hex 24)"
++umask 077
++"$dir/jdk21/bin/keytool" -genkeypair -noprompt -keystore "$store" -storetype PKCS12 \
++  -alias m30-lab-debug -keyalg RSA -keysize 3072 -validity 3650 \
++  -dname 'CN=M30 Bluetooth Lab,O=Local Research' -storepass "$password" -keypass "$password"
++printf 'storePassword=%s\nkeyPassword=%s\n' "$password" "$password" > "$props"
++echo "Created project-only signing key"
+diff --git a/scripts/bootstrap-toolchain.sh b/scripts/bootstrap-toolchain.sh
+new file mode 100755
+index 0000000..9eb6ccb
+--- /dev/null
++++ b/scripts/bootstrap-toolchain.sh
+@@ -0,0 +1,31 @@
++#!/usr/bin/env bash
++set -euo pipefail
++base="$(cd "$(dirname "$0")/.." && pwd)"
++tools="$base/host/toolchain"
++sdk="$tools/sdk"
++mkdir -p "$tools" "$sdk/platforms" "$sdk/build-tools"
++fetch() { curl --fail --location --silent --show-error --max-time 240 --output "$tools/$1" "$2"; }
++if [[ ! -d "$tools/gradle-8.10.2" ]]; then
++  fetch gradle.zip https://services.gradle.org/distributions/gradle-8.10.2-bin.zip
++  unzip -q "$tools/gradle.zip" -d "$tools"
++  rm "$tools/gradle.zip"
++fi
++if [[ ! -L "$tools/jdk21" ]]; then
++  fetch jdk21.tar.gz https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse
++  tar -xzf "$tools/jdk21.tar.gz" -C "$tools"
++  rm "$tools/jdk21.tar.gz"
++  found="$(find "$tools" -maxdepth 1 -type d -name 'jdk-21*' | sort | tail -1)"
++  ln -s "$(basename "$found")" "$tools/jdk21"
++fi
++if [[ ! -f "$sdk/platforms/android-35/android.jar" ]]; then
++  fetch platform35.zip https://dl.google.com/android/repository/platform-35_r02.zip
++  unzip -q "$tools/platform35.zip" -d "$sdk/platforms"
++  rm "$tools/platform35.zip"
++fi
++if [[ ! -x "$sdk/build-tools/35.0.0/aapt2" ]]; then
++  fetch buildtools35.zip https://dl.google.com/android/repository/build-tools_r35_linux.zip
++  unzip -q "$tools/buildtools35.zip" -d "$sdk/build-tools"
++  mv "$sdk/build-tools/android-15" "$sdk/build-tools/35.0.0"
++  rm "$tools/buildtools35.zip"
++fi
++printf 'Toolchain ready in %s\n' "$tools"
+diff --git a/scripts/build.sh b/scripts/build.sh
+new file mode 100755
+index 0000000..49c85ec
+--- /dev/null
++++ b/scripts/build.sh
+@@ -0,0 +1,9 @@
++#!/usr/bin/env bash
++set -euo pipefail
++base="$(cd "$(dirname "$0")/.." && pwd)"
++export JAVA_HOME="$base/host/toolchain/jdk21"
++export ANDROID_HOME="$base/host/toolchain/sdk"
++cd "$base/android"
++"$base/scripts/bootstrap-signing.sh"
++timeout 300 "$base/host/toolchain/gradle-8.10.2/bin/gradle" --no-daemon --console=plain assembleDebug
++sha256sum app/build/outputs/apk/debug/app-debug.apk
+diff --git a/scripts/cleanup.sh b/scripts/cleanup.sh
+new file mode 100755
+index 0000000..a4fee5c
+--- /dev/null
++++ b/scripts/cleanup.sh
+@@ -0,0 +1,6 @@
++#!/usr/bin/env bash
++set -euo pipefail
++serial="${1:?Usage: cleanup.sh ADB_SERIAL}"
++timeout 15 adb -s "$serial" shell am force-stop org.cattail.m30lab
++timeout 30 adb -s "$serial" uninstall org.cattail.m30lab
++echo "If HCI snoop was enabled, disable it in Developer options and restart Bluetooth."
+diff --git a/scripts/install.sh b/scripts/install.sh
+new file mode 100755
+index 0000000..06b1ce5
+--- /dev/null
++++ b/scripts/install.sh
+@@ -0,0 +1,12 @@
++#!/usr/bin/env bash
++set -euo pipefail
++base="$(cd "$(dirname "$0")/.." && pwd)"
++serial="${1:?Usage: install.sh ADB_SERIAL}"
++apk="$base/android/app/build/outputs/apk/debug/app-debug.apk"
++[[ -f "$apk" ]] || { echo "Build the APK first" >&2; exit 1; }
++count="$(timeout 8 adb devices | awk '$2=="device" {n++} END {print n+0}')"
++[[ "$count" == 1 ]] || { echo "Expected exactly one authorized device; found $count" >&2; exit 1; }
++timeout 10 adb -s "$serial" shell getprop ro.product.device
++existing="$(timeout 10 adb -s "$serial" shell pm path org.cattail.m30lab || true)"
++if [[ -n "$existing" ]]; then echo "Project package already present: $existing"; fi
++timeout 45 adb -s "$serial" install -r "$apk"
+diff --git a/tests/README.md b/tests/README.md
+new file mode 100644
+index 0000000..312d4be
+--- /dev/null
++++ b/tests/README.md
+@@ -0,0 +1,43 @@
++# Reproducible lab checks
++
++Run only with the phone and fixture devices owned by the lab. Keep the radio
++tests inside the isolated lab; the phone's advertisements are broadcasts.
++
++1. Build and unit-test:
++
++   ```bash
++   cd ~/m30-security-lab/android
++   JAVA_HOME=../host/toolchain/jdk21 ANDROID_HOME=../host/toolchain/sdk \
++     ../host/toolchain/gradle-8.10.2/bin/gradle --no-daemon testDebugUnitTest
++   ```
++
++2. Install and launch with the pinned ADB serial:
++
++   ```bash
++   cd ~/m30-security-lab
++   ./scripts/install.sh SERIAL
++   adb -s SERIAL shell am start -n org.cattail.m30lab/.MainActivity
++   ```
++
++3. In the app, grant the requested permission, refresh the dashboard, run scan,
++   then run one single LAB advertisement and one bounded sequence. Confirm the
++   event log reaches the hard deadline. Use `host/observe_lab.py` from a
++   separate BlueZ receiver during the sequence; report observations as cache
++   observations, not packet counts.
++
++4. Start `host/gatt_fixture.py --seconds 120`, scan for the LAB service, select
++   only that fixture, and use read/write/notify controls intentionally. A write
++   requires the visible preview confirmation. Run the resilience button only
++   after selecting the fixture and record all status/timeout messages.
++
++5. Test the negative paths by turning Bluetooth off before pressing scan and by
++   denying the requested permission in Settings. Restore Bluetooth and the
++   permission afterward. Do not leave advertising active.
++
++6. Check HCI logging only after following `research/capture.md`, retrieve the
++   capture, inspect it with Wireshark, then disable the setting and restart
++   Bluetooth.
++
++The UI contains no popup-spam, pairing-impersonation, raw HCI injection, or
++unlimited flooding mode. A generic third-party disconnect is not a test case
++because the observed M30 transport has no such operation.
