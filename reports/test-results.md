@@ -74,5 +74,12 @@ and cleanup in `onStop`, `onDestroy`, timeout, and error paths. No HCI snoop log
 was collected because the device-side Developer Options toggle requires a
 physical user action. The exact workflow is in `research/capture.md`.
 
+After revoking `ACCESS_FINE_LOCATION`, pressing Start Scan logged a permission
+missing block; the permission was granted again afterward. The phone was
+initially inventoried with Bluetooth off and the dashboard displayed the off
+state. A later shell `svc bluetooth disable` attempt on this Samsung build did
+not change the service state, so the button-level Bluetooth-off block was not
+independently exercised; Bluetooth was left enabled.
+
 The project did not flash partitions, wipe data, change the bootloader, replace
 recovery, install a kernel, disable SELinux, or attempt RF interference.
