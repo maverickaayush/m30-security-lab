@@ -43,9 +43,10 @@ rate, packet loss, or exact over-the-air timing. The app reports this limitation
 in its event log.
 
 The current UI also accepts an optional four-byte printable LAB tag. It is
-encoded in the synthetic manufacturer field for an opt-in receiver to inspect;
-it is labeled as a broadcast marker and cannot cause a popup on a device that
-has no cooperating receiver.
+encoded in the synthetic manufacturer field for an opt-in receiver to inspect.
+The UI calls it "LAB popup text (4 ASCII; opt-in receiver only)"; that label
+describes the cooperating receiver, and the tag cannot cause a popup on a
+device that has no cooperating receiver.
 
 After this tag change, a fresh 35-second host receiver run observed counter 0
 with tag `LAB` at approximately -62 dBm. The phone callback accepted the
@@ -76,9 +77,19 @@ status 0 and value `4C4142`; the fixture log recorded `READ 4c4142`.
 A deliberate write preview of `414243` reached the phone API but returned status
 1 after the corresponding fixture process had expired, so it is recorded as a
 failed/fixture-timing case rather than a successful write. No characteristic is
-written automatically. Notification and the three-cycle resilience control are
-implemented, but a complete independent notification/resilience measurement was
-not completed before the fixture deadline; they remain explicitly untested.
+written automatically. Notification and the three-cycle resilience control
+were not completed during that earlier fixture lifetime.
+
+In a **separate 2026-10-26 audit run** with a new 120-second fixture, the phone
+subscribed (CCCD status 0), intentionally wrote `4C414232` (`LAB2`, write
+status 0), received a matching notification, and unsubscribed (CCCD status 0).
+The independent fixture logged `NOTIFY start`, two explicitly confirmed
+`WRITE 4c414232` events, `NOTIFY stop`, then a bounded stop. A three-cycle
+app-owned connect/discover/disconnect sequence finished `3/3 failures=0` in
+6971 ms; each callback and discovery reported status 0. This validates one
+fixture session, not a packet-level RF rate or unrelated-device disruption.
+Commands, controls and private evidence hashes are in
+`research/experiment-results.md`.
 
 ## Negative and cleanup checks
 

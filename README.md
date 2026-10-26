@@ -64,6 +64,15 @@ on this phone cannot carry an arbitrary-length message alongside the LAB UUID.
 
 See [device capabilities](reports/device-capabilities.md), [test results](reports/test-results.md), [capture workflow](research/capture.md), [transport reverse engineering](research/hardware-reverse-engineering.md), [Noise package inspection](research/noise-firmware.md), and [disconnect feasibility](reports/deauth-feasibility.md).
 
+The follow-on research audit is in [claim ledger](research/research-audit.md),
+[capability comparison](research/capability-comparison.md),
+[reverse-engineering opportunities](research/reverse-engineering-opportunities.md),
+[Linux Bluetooth paths](research/linux-bluetooth-paths.md),
+[prior art](research/prior-art.md), [publication plan](research/publication-plan.md)
+and [proof-of-concept results](research/experiment-results.md). The read-only
+`scripts/inspect_scsc_firmware.py` inspects a **local copy** of a Samsung SCSC
+`smxf` image; copied firmware remains ignored under `evidence/`.
+
 The proposed internal HCI kernel config and source readiness checks are in
 [kernel HCI readiness](research/kernel-hci-readiness.md). They are offline
 research artifacts; no kernel image has been installed on the phone.

@@ -29,6 +29,17 @@ from tracked documentation. Full raw logs and screenshots remain ignored under
 | `git apply --check research/kernel/scsc_bluez-send-lifetime.patch` against family `scsc_bluez.c` | Exit 0; patch applies to source revision `0952065`; compilation and runtime remain untested |
 | Android SDK `dexdump` on Noise `classes2.dex` | Exit 0; extracted candidate BES TOTA UUIDs and OTA method/string call paths; no popup/deauth path found |
 | Rebuilt `./scripts/build.sh` and `./scripts/install.sh <serial>` | Exit 0; APK SHA-256 `19bd828132a48c39695b2be1a948438b00ea87bd70f7374ba84dde7873028d06` |
+| Audit `git status --short`, `git log --oneline`, `git ls-files` | Exit 0; clean at `463eb83`, 37 tracked files before this follow-on work |
+| Serial-pinned `adb devices -l`, `getprop`, `uname -a`, `getenforce`, targeted `/proc/config.gz` and device nodes | Exit 0; Android 10 M30 baseline, enforcing, SCSC H4 and UDI nodes reconfirmed |
+| `adb pull /vendor/etc/wifi/mx140.bin evidence/mx140.bin`; `sha256sum`; `file`; `xxd` | Exit 0; local ignored 1,360,017-byte `smxf` candidate, hash in `research/experiment-results.md` |
+| `python3 scripts/inspect_scsc_firmware.py evidence/mx140.bin` | Exit 0; header, constant and full-image CRCs match copied image |
+| `python3 -m unittest discover -s tests -p 'test_scsc_firmware.py' -v` | Exit 0; synthetic corruption and bounds test passed |
+| `python3 host/gatt_fixture.py --seconds 120` plus explicit phone UI scan/connect/subscribe/write/unsubscribe/three-cycle sequence | Exit 0; fixture logged two confirmed writes, notification subscription and bounded shutdown; phone reported 3/3 cycles status 0 |
+| `git ls-remote` official REA and M30-family source | Exit 0; revisions `1173c0a9dc1b352a60943a491462294db8f353ae` and `095206579f69121278ed1dd5fd0d7975c0705c6a` |
+| Samsung OSRC direct M305F search | HTTP 403; no exact stock source was acquired |
 
 The host fixture and receiver use bounded timeouts. ADB helper commands use
 explicit `timeout` wrappers where a device or UI operation could hang.
+Audit tool versions: Python 3.14.4, Node 22.23.2, npm 10.9.8, ADB 34.0.5,
+BlueZ 5.85, Wireshark 4.6.4, Git 2.53.0. All primary URLs and their role are
+listed in `research/sources.md` and `research/prior-art.md`.

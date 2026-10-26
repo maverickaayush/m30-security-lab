@@ -119,8 +119,10 @@ connection. A direct HCI Disconnect command would require a connection handle
 owned by this controller. It cannot be turned into an area-wide disconnect or a
 popup sender by calling the HAL.
 
-Potential future research that is technically meaningful is limited to a
-separate, offline-matched kernel/HAL build or a second external controller with
-documented raw-HCI support. Neither should be introduced by replacing the
-phone's kernel or by sharing its internal controller with BlueZ during this
-project.
+Additional non-destructive research is documented in
+`research/reverse-engineering-opportunities.md`: the copied SCSC `smxf` image
+now has a source-backed, CRC-verified header parser, and the live Wi-Fi UDI
+node has a family-source logging path. A matched kernel/HAL build or a second
+external controller remains a separate longer-term access project. The current
+task did not replace the phone's kernel or share its internal controller with
+BlueZ.

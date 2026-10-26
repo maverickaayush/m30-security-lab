@@ -56,8 +56,10 @@ third-party disconnect was found.
 
 ## Nearby popup or custom message request
 
-The phone can broadcast a synthetic LAB marker and can exchange a message with
-an explicitly selected, cooperating GATT fixture. It cannot make arbitrary
+The phone can broadcast a synthetic LAB marker and, in the separate audit run,
+intentionally write and receive a notification from an explicitly selected,
+cooperating GATT fixture. The earlier fixture-timed-out write remains a failure.
+It cannot make arbitrary
 nearby Android, iOS, earbud, or computer devices display a custom popup. A
 Bluetooth advertisement is data for a scanner; the receiving operating system
 decides whether to show anything. Triggering a popup on an uninstalled or
