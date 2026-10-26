@@ -39,7 +39,7 @@ class MobileConnectionLab(
             arrayOf("RFCOMM service connection (Android)", "L2CAP echo (Linux HCI unavailable)"))
     }
     private val countInput = input("Requests, 1–20", "3")
-    private val durationInput = input("Duration seconds, 1–30", "10")
+    private val durationInput = input("Duration seconds, 1–30", "30")
     private var selected: BluetoothDevice? = null
     private var selectedName = ""
     private var scanDeadline: Runnable? = null
@@ -151,6 +151,11 @@ class MobileConnectionLab(
     private fun showServices(device: BluetoothDevice) {
         val uuids = try { device.uuids?.map { it.uuid.toString() } ?: emptyList() } catch (_: Exception) { emptyList() }
         detail.text = detail.text.toString().substringBefore("\nObserved service UUIDs:") + "\nObserved service UUIDs: ${if (uuids.isEmpty()) "none/not returned" else uuids.joinToString()}"
+        if (uuids.contains(AndroidRfcommBackend.FIXTURE_UUID.toString())) {
+            uuidInput.setText(AndroidRfcommBackend.FIXTURE_UUID.toString())
+            status.text = "Ready: LAB RFCOMM fixture service selected; request/response will be verified"
+            return
+        }
         if (uuids.isNotEmpty()) status.text = "Ready: select a returned service UUID explicitly"
     }
 

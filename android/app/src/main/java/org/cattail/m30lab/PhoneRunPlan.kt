@@ -11,5 +11,5 @@ data class PhoneRunPlan(val requests: Int, val durationSeconds: Int) {
         !cancelled && completed < requests && elapsedMs < durationSeconds * 1000L
 
     fun operationTimeoutMs(elapsedMs: Long): Long =
-        (durationSeconds * 1000L - elapsedMs).coerceIn(0L, 5000L)
+        (durationSeconds * 1000L - elapsedMs).coerceIn(0L, 12000L)
 }

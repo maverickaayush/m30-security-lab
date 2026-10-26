@@ -7,6 +7,7 @@ import android.os.SystemClock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
+import java.nio.charset.StandardCharsets
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Only selected, supported phone-side protocol operations belong behind this interface. */
@@ -22,6 +23,11 @@ interface PhoneProtocolBackend {
 
 /** Android framework RFCOMM via the existing HAL; no raw HCI or BlueZ dependency. */
 class AndroidRfcommBackend(private val handler: Handler) : PhoneProtocolBackend {
+    companion object {
+        val FIXTURE_UUID: UUID = UUID.fromString("7f5f42d6-4659-4c15-9fe7-7de7a7033b02")
+        const val REQUEST = "M30LAB/1 PING\n"
+        const val RESPONSE = "M30LAB/1 PONG\n"
+    }
     override val id = "Android Bluetooth RFCOMM service UUID"
     private val stopped = AtomicBoolean(false)
     @Volatile private var activeSocket: BluetoothSocket? = null
@@ -46,14 +52,14 @@ class AndroidRfcommBackend(private val handler: Handler) : PhoneProtocolBackend 
             .put("controller_owner", "Android Bluetooth service").put("mechanism", "RFCOMM connection test")
             .put("target", target.address).put("service_uuid", service.toString())
             .put("limits", JSONObject().put("requests", requests).put("duration_s", durationSeconds)
-                .put("per_operation_timeout_s", 5).put("workers", 1))
+                .put("per_operation_timeout_s", 12).put("workers", 1))
             .put("status", "running").put("baseline", JSONObject.NULL).put("operations", operations)
             .put("target_existing_link_effect", "not_measured")
         worker = Thread({
             try {
                 val baseline = attempt(target, service, started, plan)
                 synchronized(result) { result.put("baseline", baseline) }
-                if (!baseline.optBoolean("connected")) {
+                if (!baseline.optBoolean("connected") || (service == FIXTURE_UUID && !baseline.optBoolean("exchange_ok"))) {
                     synchronized(result) { result.put("status", if (stopped.get()) "stopped" else "baseline_failed") }
                 } else {
                     var failed = false
@@ -61,7 +67,7 @@ class AndroidRfcommBackend(private val handler: Handler) : PhoneProtocolBackend 
                         if (!plan.canRunNext(operations.length(), SystemClock.elapsedRealtime() - started, stopped.get())) break
                         val operation = attempt(target, service, started, plan).put("index", index)
                         synchronized(result) { operations.put(operation) }
-                        if (!operation.optBoolean("connected")) { failed = true; break }
+                        if (!operation.optBoolean("connected") || (service == FIXTURE_UUID && !operation.optBoolean("exchange_ok"))) { failed = true; break }
                         val wait = minOf(1000L, deadline - SystemClock.elapsedRealtime())
                         if (wait > 0) Thread.sleep(wait)
                     }
@@ -90,6 +96,7 @@ class AndroidRfcommBackend(private val handler: Handler) : PhoneProtocolBackend 
         val remaining = plan.operationTimeoutMs(begun - started)
         if (remaining <= 0 || stopped.get()) return JSONObject().put("connected", false).put("error", "deadline/cancelled")
         var socket: BluetoothSocket? = null
+        var connected = false
         val timedOut = AtomicBoolean(false)
         val timeout = Runnable { timedOut.set(true); try { socket?.close() } catch (_: Exception) {} }
         return try {
@@ -97,9 +104,25 @@ class AndroidRfcommBackend(private val handler: Handler) : PhoneProtocolBackend 
             activeSocket = socket
             handler.postDelayed(timeout, remaining)
             socket.connect()
-            JSONObject().put("connected", true).put("elapsed_ms", SystemClock.elapsedRealtime() - begun)
+            connected = true
+            val operation = JSONObject().put("connected", true)
+            if (service == FIXTURE_UUID) {
+                socket.outputStream.write(REQUEST.toByteArray(StandardCharsets.US_ASCII))
+                socket.outputStream.flush()
+                val received = ArrayList<Byte>(64)
+                while (received.size < 64) {
+                    val b = socket.inputStream.read()
+                    if (b < 0) break
+                    received.add(b.toByte())
+                    if (b == '\n'.code) break
+                }
+                val reply = String(received.toByteArray(), StandardCharsets.US_ASCII)
+                operation.put("request", REQUEST.trimEnd()).put("response", reply.trimEnd())
+                    .put("exchange_ok", reply == RESPONSE)
+            }
+            operation.put("elapsed_ms", SystemClock.elapsedRealtime() - begun)
         } catch (e: Exception) {
-            JSONObject().put("connected", false).put("timed_out", timedOut.get())
+            JSONObject().put("connected", connected).put("exchange_ok", false).put("timed_out", timedOut.get())
                 .put("error", e.javaClass.simpleName).put("elapsed_ms", SystemClock.elapsedRealtime() - begun)
         } finally {
             handler.removeCallbacks(timeout)

@@ -17,6 +17,8 @@ Project for an owned Samsung SM-M305F (`m30lte`) running Android 10. The app use
 
 ## Rebuild
 
+The phone-to-laptop Bluetooth Classic RFCOMM fixture was validated end to end on 2026-10-26; see [the measured report](reports/rfcomm-phone-fixture-2026-10-26.md).
+
 ```bash
 cd ~/m30-security-lab
 ./scripts/bootstrap-toolchain.sh

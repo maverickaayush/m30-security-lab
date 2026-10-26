@@ -11,9 +11,10 @@ class PhoneRunPlanTest {
         assertFalse(plan.canRunNext(3, 0, false))
         assertFalse(plan.canRunNext(0, 10000, false))
         assertFalse(plan.canRunNext(0, 100, true))
-        assertEquals(5000L, plan.operationTimeoutMs(0))
+        assertEquals(10000L, plan.operationTimeoutMs(0))
         assertEquals(100L, plan.operationTimeoutMs(9900))
         assertEquals(0L, plan.operationTimeoutMs(10000))
+        assertEquals(12000L, PhoneRunPlan(3, 30).operationTimeoutMs(0))
     }
 
     @Test fun invalidUnboundedPlansAreRejected() {
