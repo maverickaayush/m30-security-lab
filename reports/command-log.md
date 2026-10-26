@@ -93,4 +93,4 @@ the vendor ELFs and firmware image remain private.
 | Android source build/install after RFCOMM logging changes | Exit 0; APK SHA-256 `6075cba4395bddf99682fb6861a9dc03bed965356f03f98af46b44b6d71c5ce6`; package upgrade succeeded |
 | Android `testDebugUnitTest` | Exit 0; existing bounded scheduler/parser tests passed |
 | Read-only boot layout and partition sizes/hashes | Exit 0; `research/recovery-readiness-2026-10-26.md`; no partition copied or written |
-| New RFCOMM fixture run `rfcomm-reliability-20261026-a` | Fixture registered and emitted `fixture_ready`; phone matrix actions pending; automatic 600 s cleanup active |
+| New RFCOMM fixture run `rfcomm-reliability-20261026-a` | Fixture registered and emitted `fixture_ready`; handset remained locked, so no phone run occurred; SIGINT cleanup emitted `stopped_and_restored` and `bluetoothctl` confirmed Powered yes, Discoverable no, Pairable no |

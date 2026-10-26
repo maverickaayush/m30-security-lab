@@ -35,12 +35,14 @@ logs. This is an intermittent setup result, not a resolved root cause.
 | --- | --- | --- | --- | --- | --- | --- |
 | A1/A2 (historical) | not independently timestamped | uncertain | changed later | unknown | 5–6 s | baseline failed before fixture connection |
 | A3 (historical success) | yes, but no ready event | yes | changed | stopped before test | 12 s | exchange passed |
-| B (current) | explicit `fixture_ready` | fresh request | phone bond retained; laptop pairing may be required | app stops discovery before SDP/connect | 12 s / 30 s | awaiting phone run |
+| B (current) | explicit `fixture_ready` | fresh request | phone bond retained; laptop pairing may be required | app stops discovery before SDP/connect | 12 s / 30 s | no phone run: handset remained locked; fixture stopped and restored |
 
-The current run uses fixture correlation ID `rfcomm-reliability-20261026-a`;
-its raw JSONL is ignored under `evidence/rfcomm/`. It will stop after 600 s and
-restore the laptop's initial discoverability and pairability. A complete B run
-will vary one factor per repetition: (1) fresh SDP versus cached UUID, (2)
+The attempted run used fixture correlation ID `rfcomm-reliability-20261026-a`;
+its raw JSONL is ignored under `evidence/rfcomm/`. It emitted `fixture_ready`
+and was stopped after 4 minutes 13 seconds; its `finally` block restored the
+laptop's initial discoverability and pairability. No phone connection event,
+SDP selection, exchange or cancellation was recorded. A complete B run will
+vary one factor per repetition: (1) fresh SDP versus cached UUID, (2)
 trusted bond versus newly paired bond, (3) discovery stopped versus discovery
 still active, and (4) 12-second versus shorter bounded deadline. No unlimited
 retry is allowed.
@@ -75,6 +77,8 @@ fixture events. The fixture must be stopped with SIGINT after the runs so its
 
 The Android RFCOMM implementation is live and reliable for the previously
 successful cooperating fixture runs, but the two early baseline failures are
-not isolated. The next evidence needed is one completed matrix run with the
-new phase logs. No HCI handoff, raw HCI operation, flooding, or third-party
-link test belongs in this experiment.
+not isolated. The new phase-logging matrix did not run because the handset
+remained locked; it therefore adds setup evidence but no connection result.
+The next evidence needed is one completed matrix run with the new phase logs.
+No HCI handoff, raw HCI operation, flooding, or third-party link test belongs
+in this experiment.
