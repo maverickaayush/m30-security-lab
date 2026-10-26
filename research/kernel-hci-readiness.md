@@ -48,7 +48,12 @@ USB `btusb`, since the proposed path uses the internal SCSC controller.
    compatibility patch later compiled in the family tree, but have not run on
    the installed handset.
    This is a source observation, not a proven defect in the installed kernel,
-   because the bridge is disabled on the phone.
+   because the bridge is disabled on the phone. The family-tree bridge and a
+   Bluetooth-enabled candidate kernel now compile offline after the documented
+   compatibility and lifetime patches; see
+   [`research/kernel-build-2026-10-26.md`](kernel-build-2026-10-26.md). This
+   still does not establish compatibility with the installed firmware or a
+   safe flash.
 
 The current phone's USB manager reports a dual-role port and the kernel has
 `CONFIG_USB_XHCI_HCD=y`; `CONFIG_USB_OTG` being unset alone does **not** prove

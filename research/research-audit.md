@@ -81,6 +81,17 @@ source revisions and redacted results only.
 | The laptop backend can run a bounded protocol experiment | `host/blue_stress.py`, 7 unit tests, real adapter dry-run | Implemented and dry-run verified; target effect untested | Named target, service inventory, independent connection observation |
 | New UI has single and multi-profile LAB controls | APK build/install, live UI hierarchy, callback log | Observed on handset; callback only | Independent receiver during this exact revision |
 
+## Kernel/RFCOMM continuation corrections
+
+| Claim | Supporting artifact | Level | Missing verification |
+|---|---|---|---|
+| Android RFCOMM exchanged a LAB request and response from the phone | `reports/rfcomm-phone-fixture-2026-10-26.md`, independent BlueZ fixture logs | Observed live for the cooperating fixture | A matrix run with the new phase logs to isolate earlier setup failures |
+| Family baseline kernel built completely | `research/kernel-build-2026-10-26.md`, private artifact hashes | Compiled offline; source-supported only for family tree | Exact Samsung source/ABI, packaging and boot validation |
+| Family Bluetooth candidate built completely | Same report; `CONFIG_BT=y`, `CONFIG_SCSC_BT_BLUEZ=y` in final config | Compiled offline; not installed | Exact build match, HCI registration and Android restoration |
+| Bluebinder can provide a VHCI proxy in its supported environment | Bluebinder revision `ebab7c3...`, source and service unit | Source-supported | M30 kernel VHCI/Binder policy and Android 10 runtime compatibility |
+| HAL close stops the async watcher and closes vendor resources | REA evidence `evidence/rea-hal-close-final.json`, HAL hash | Static binary evidence | Runtime callback timing and service restart |
+| Current partition layout is known | Read-only by-name listing, sizes and hashes | Observed live | Verified recovery boot and stock restore artifact |
+
 # 2026-10-26 native-phone continuation ledger
 
 | Claim | Supporting artifact | Level | Missing verification |

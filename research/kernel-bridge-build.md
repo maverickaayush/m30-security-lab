@@ -66,5 +66,9 @@ PATH=/tmp/m30-cross/usr/bin:$PATH timeout 120s make -C /tmp/m30-family-kernel \
 The temporary compiler package extraction and wrapper are documented in
 `reports/mobile-integration.md`. The installed phone still reports
 `# CONFIG_BT is not set` and `# CONFIG_SCSC_BT_BLUEZ is not set`, so none of
-these compiled changes execute there. A bootable matched build and tested
+these compiled changes execute there. A complete baseline and a complete
+Bluetooth-enabled family-tree candidate were subsequently built offline;
+their artifact hashes, configuration differences and storage constraints are
+recorded in [`research/kernel-build-2026-10-26.md`](kernel-build-2026-10-26.md).
+Those outputs remain unboot-tested. A bootable matched build and tested
 restore procedure are the next gates before any live kernel experiment.

@@ -78,3 +78,19 @@ the vendor ELFs and firmware image remain private.
 | Android `testDebugUnitTest` | Exit 0; bounded phone scheduler tests pass |
 | `scripts/build.sh`, `scripts/install.sh SERIAL`, `am start` | Exit 0; final APK SHA-256 `6b07fec128512b5a8f94d8d17fb23d8671f93e1a12afb4e588b8ab3ac28956c5`; installed and activity launched |
 | `uiautomator dump` | Exit 0; lock-screen nodes only, so tap/export verification remains pending user unlock |
+
+## 2026-10-26 kernel/RFCOMM continuation
+
+| Command or check | Result / exit code |
+|---|---|
+| `timeout 1200s make ... m30lte_00_defconfig` with isolated AArch64 GCC 14 | Exit 0; family baseline configuration generated |
+| Full baseline `make` with `__ANDROID__`, `HOSTCFLAGS=-fcommon`, explicit warning compatibility | Exit 0; Image, Image.gz, vmlinux, System.map, dtb.img and four M30 DTBs produced; hashes in `research/kernel-build-2026-10-26.md` |
+| Full Bluetooth candidate with `m30lte-hci.fragment` and both SCSC patches | Exit 0; `CONFIG_BT=y` and `CONFIG_SCSC_BT_BLUEZ=y`; complete artifacts and hashes recorded |
+| First candidate link in `/dev/shm` | Exit 2, no space; output moved to isolated tmpfs and rebuilt successfully; no source change or claim was based on the failed link |
+| `scripts/build_m30_kernel.sh` shell syntax and source checks | Exit 0; reproduction script added; no flash or packaging performed |
+| Bluebinder clone and source audit | Exit 0; revision `ebab7c3c3fb15f0eea4db0ff14837066a716f973`; `/dev/vhci`, Binder and HIDL/AIDL requirements recorded |
+| REA `function ... 0x10ca2c --provider ghidra` | Exit 0; close-path evidence `evidence/rea-hal-close-final.json`; summary in `research/rea-follow-on-2026-10-26.md` |
+| Android source build/install after RFCOMM logging changes | Exit 0; APK SHA-256 `6075cba4395bddf99682fb6861a9dc03bed965356f03f98af46b44b6d71c5ce6`; package upgrade succeeded |
+| Android `testDebugUnitTest` | Exit 0; existing bounded scheduler/parser tests passed |
+| Read-only boot layout and partition sizes/hashes | Exit 0; `research/recovery-readiness-2026-10-26.md`; no partition copied or written |
+| New RFCOMM fixture run `rfcomm-reliability-20261026-a` | Fixture registered and emitted `fixture_ready`; phone matrix actions pending; automatic 600 s cleanup active |

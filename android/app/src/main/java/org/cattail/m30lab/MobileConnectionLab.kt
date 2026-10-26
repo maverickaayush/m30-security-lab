@@ -62,7 +62,10 @@ class MobileConnectionLab(
                 BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> stopDiscovery("finished")
                 BluetoothDevice.ACTION_UUID -> {
                     val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
-                    if (device != null && device.address == selected?.address) showServices(device)
+                    if (device != null && device.address == selected?.address) {
+                        log("SDP completed for selected Classic device; UUIDs=${device.uuids?.size ?: 0}")
+                        showServices(device)
+                    }
                 }
             }
         }
@@ -114,6 +117,7 @@ class MobileConnectionLab(
     fun select(device: BluetoothDevice, name: String) {
         if (backend.isRunning()) { status.text = "Running: stop the current test before changing target"; return }
         selected = device; selectedName = name
+        log("Classic target selected: $name / ${typeName(device)}")
         status.text = "Selected $name / ${device.address} / ${typeName(device)}; service check required"
         showServices(device)
     }
@@ -125,6 +129,7 @@ class MobileConnectionLab(
             discovering = adapter.startDiscovery()
             if (!discovering) { status.text = "Failed: Android refused Classic discovery"; return }
             scanDeadline = Runnable { stopDiscovery("30-second deadline") }.also { handler.postDelayed(it, 30_000) }
+            log("Classic discovery started; 30-second deadline")
             status.text = "Running: Classic discovery, 30-second limit"
         } catch (e: Exception) { status.text = "Failed: Classic discovery: ${e.javaClass.simpleName}" }
     }
@@ -135,6 +140,7 @@ class MobileConnectionLab(
         discovering = false
         try { if (adapter.isDiscovering) adapter.cancelDiscovery() } catch (_: Exception) {}
         status.text = "Completed: Classic discovery $reason; ${found.size} selectable devices"
+        log("Classic discovery finished: reason=$reason devices=${found.size}")
     }
 
     private fun checkServices() {
@@ -143,6 +149,7 @@ class MobileConnectionLab(
         if (device.type == BluetoothDevice.DEVICE_TYPE_LE) { status.text = "Unsupported: BLE-only device has no RFCOMM service"; return }
         try {
             stopDiscovery("service check")
+            log("SDP request started for selected Classic device")
             if (!device.fetchUuidsWithSdp()) status.text = "Failed: Android rejected Classic SDP request"
             else status.text = "Checking Classic services for $selectedName; wait for UUID result"
         } catch (e: Exception) { status.text = "Failed: SDP: ${e.javaClass.simpleName}" }

@@ -7,6 +7,8 @@ import os
 import signal
 import socket
 import threading
+import time
+import uuid
 from datetime import datetime, timezone
 
 import dbus
@@ -34,13 +36,16 @@ SDP_RECORD = f'''<?xml version="1.0" encoding="UTF-8" ?>
 
 
 class Logger:
-    def __init__(self, path):
+    def __init__(self, path, run_id):
         descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         self.file = os.fdopen(descriptor, "w", buffering=1)
         self.lock = threading.Lock()
+        self.run_id = run_id
 
     def event(self, kind, **data):
-        record = {"timestamp_utc": datetime.now(timezone.utc).isoformat(), "event": kind, **data}
+        record = {"timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                  "monotonic_ns": time.monotonic_ns(), "run_id": self.run_id,
+                  "event": kind, **data}
         with self.lock:
             self.file.write(json.dumps(record, sort_keys=True) + "\n")
         print(json.dumps(record, sort_keys=True), flush=True)
@@ -139,6 +144,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--log", help="new private JSONL path")
     parser.add_argument("--max-seconds", type=int, default=900)
+    parser.add_argument("--run-id", default=None, help="correlation ID for this fixture run")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     if args.self_test:
@@ -147,7 +153,7 @@ def main():
     if not args.log or not 60 <= args.max_seconds <= 1800:
         parser.error("--log and --max-seconds 60..1800 required")
     DBusGMainLoop(set_as_default=True)
-    logger = Logger(args.log)
+    logger = Logger(args.log, args.run_id or str(uuid.uuid4()))
     bus = dbus.SystemBus()
     adapter_path = bus.get_object("org.bluez", "/org/bluez/hci0")
     props = dbus.Interface(adapter_path, "org.freedesktop.DBus.Properties")
@@ -175,6 +181,7 @@ def main():
         props.Set("org.bluez.Adapter1", "Pairable", dbus.Boolean(True))
         props.Set("org.bluez.Adapter1", "Discoverable", dbus.Boolean(True))
         logger.event("discoverable", deadline_seconds=args.max_seconds)
+        logger.event("fixture_ready", uuid=UUID, channel=22)
         GLib.timeout_add_seconds(args.max_seconds, stop)
         loop.run()
     finally:

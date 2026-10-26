@@ -50,3 +50,15 @@ function, Wi-Fi monitor mode, or RF front ends for LF RFID, sub-GHz or IR. Its
 NFC state is unverified beyond `CONFIG_NFC=n`. Bluetooth advertising can carry
 data, but receiving systems decide what UI to show. The installed Noise
 firmware lookup is HTTPS metadata; it is not a broadcast-popup protocol.
+
+## Continuation status table
+
+| Capability | Works now | Evidence | Built offline | Tested on device | Required change | Remaining blocker |
+| --- | --- | --- | --- | --- | --- | --- |
+| Android RFCOMM fixture exchange | Yes, cooperating fixture | Phone sent `M30LAB/1 PING` and verified `PONG`; independent BlueZ logs matched | N/A | Yes, prior bounded runs | Isolate two earlier baseline failures with phase logs | Current matrix run awaits unlocked phone actions |
+| RFCOMM cancellation/cleanup | Yes for prior run | Baseline plus nine matching fixture connections and disconnects | N/A | Yes | Repeat with new run correlation IDs | No isolated root cause for early setup failures |
+| Native SCSC BlueZ bridge | No live access | Current phone has no `CONFIG_BT`/bridge and no `hci0` | Yes, complete family candidate | No | Exact source, packaging, ownership and recovery | Current image unchanged; no boot test |
+| Baseline family kernel | No installed change | `Image`, `vmlinux`, DTB set and hashes in `research/kernel-build-2026-10-26.md` | Yes, complete | No | Match Samsung source/ABI/boot packaging | Exact OSRC source and restore procedure |
+| Bluebinder/VHCI route | No | Official source requires `/dev/vhci`, Binder/HIDL/AIDL and Linux HCI | No M30 build attempted | No | Enable VHCI/BT, port Binder policy and service lifecycle | Kernel and Android policy unavailable |
+| Raw HCI commands on M30 | No | No internal `hci0`; HAL H4 only | Candidate would support path | No | Boot-tested exclusive owner | Controller handoff unvalidated |
+| Third-party link disruption | No mechanism established | HCI disconnect uses a local controller handle; no target advisory matched | N/A | No | Named affected target/version and independent control | Generic capability unsupported |

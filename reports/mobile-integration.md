@@ -65,6 +65,27 @@ Uninstall if desired: `adb -s YOUR_ADB_SERIAL uninstall org.cattail.m30lab`.
 No radio test starts on install or boot. The new test does not change the
 kernel, recovery, SELinux or vendor service.
 
+## Continuation update — 2026-10-26
+
+The RFCOMM path was subsequently exercised from the phone against the owned
+laptop fixture. The phone discovered the explicit SDP UUID, sent
+`M30LAB/1 PING`, verified `M30LAB/1 PONG`, and completed one baseline plus three
+requested connections. A separate cancellation run completed one baseline
+plus nine requested exchanges. Independent fixture logs recorded matching
+connections, requests, responses and disconnections. The detailed evidence is
+in [`reports/rfcomm-phone-fixture-2026-10-26.md`](rfcomm-phone-fixture-2026-10-26.md).
+
+This does not erase the two earlier baseline failures: they occurred before the
+fixture received a connection, and later SDP, timeout and trust conditions
+changed together. The cause remains intermittent until the matrix in
+[`research/rfcomm-reliability-2026-10-26.md`](../research/rfcomm-reliability-2026-10-26.md)
+is completed.
+
+The current logging revision adds run IDs, phase timestamps, redacted
+exceptions and an explicit fixture-ready event. Its APK was built and
+installed with SHA-256
+`6075cba4395bddf99682fb6861a9dc03bed965356f03f98af46b44b6d71c5ce6`.
+
 For the offline kernel compile, `apt-get download` fetched Ubuntu 14.3.0
 `gcc-14-aarch64-linux-gnu`, `cpp-14-aarch64-linux-gnu`, base,
 `libgcc-14-dev-arm64-cross`, and binutils 2.46 into `/tmp/m30-cross-debs`.

@@ -47,7 +47,9 @@ class AndroidRfcommBackend(private val handler: Handler) : PhoneProtocolBackend 
         val started = SystemClock.elapsedRealtime()
         val deadline = started + durationSeconds * 1000L
         val operations = JSONArray()
+        val runId = UUID.randomUUID().toString()
         result = JSONObject().put("schema", "m30-security-lab/mobile-connection/v1")
+            .put("run_id", runId).put("clock", "android.elapsedRealtime")
             .put("execution_location", "phone").put("backend", id)
             .put("controller_owner", "Android Bluetooth service").put("mechanism", "RFCOMM connection test")
             .put("target", target.address).put("service_uuid", service.toString())
@@ -94,18 +96,24 @@ class AndroidRfcommBackend(private val handler: Handler) : PhoneProtocolBackend 
     private fun attempt(target: BluetoothDevice, service: UUID, started: Long, plan: PhoneRunPlan): JSONObject {
         val begun = SystemClock.elapsedRealtime()
         val remaining = plan.operationTimeoutMs(begun - started)
-        if (remaining <= 0 || stopped.get()) return JSONObject().put("connected", false).put("error", "deadline/cancelled")
+        val operation = JSONObject()
+            .put("phase", if (stopped.get()) "cancelled_before_socket" else "deadline_before_socket")
+            .put("started_offset_ms", begun - started)
+            .put("connected", false)
+        if (remaining <= 0 || stopped.get()) return operation.put("error", "deadline/cancelled")
         var socket: BluetoothSocket? = null
         var connected = false
         val timedOut = AtomicBoolean(false)
         val timeout = Runnable { timedOut.set(true); try { socket?.close() } catch (_: Exception) {} }
-        return try {
+        try {
             socket = target.createRfcommSocketToServiceRecord(service)
+            operation.put("phase", "connect").put("socket_created_offset_ms", SystemClock.elapsedRealtime() - started)
             activeSocket = socket
             handler.postDelayed(timeout, remaining)
             socket.connect()
             connected = true
-            val operation = JSONObject().put("connected", true)
+            operation.put("connected", true).put("connected_offset_ms", SystemClock.elapsedRealtime() - started)
+                .put("phase", if (service == FIXTURE_UUID) "exchange" else "connected")
             if (service == FIXTURE_UUID) {
                 socket.outputStream.write(REQUEST.toByteArray(StandardCharsets.US_ASCII))
                 socket.outputStream.flush()
@@ -120,16 +128,25 @@ class AndroidRfcommBackend(private val handler: Handler) : PhoneProtocolBackend 
                 operation.put("request", REQUEST.trimEnd()).put("response", reply.trimEnd())
                     .put("exchange_ok", reply == RESPONSE)
             }
-            operation.put("elapsed_ms", SystemClock.elapsedRealtime() - begun)
+            operation.put("phase", "completed")
         } catch (e: Exception) {
-            JSONObject().put("connected", connected).put("exchange_ok", false).put("timed_out", timedOut.get())
-                .put("error", e.javaClass.simpleName).put("elapsed_ms", SystemClock.elapsedRealtime() - begun)
+            operation.put("connected", connected).put("exchange_ok", false).put("timed_out", timedOut.get())
+                .put("phase", if (timedOut.get()) "connect_timeout_or_closed" else "exception")
+                .put("error", e.javaClass.simpleName).put("error_message", redactError(e.message))
         } finally {
             handler.removeCallbacks(timeout)
             try { socket?.close() } catch (_: Exception) {}
             activeSocket = null
+            operation.put("timed_out", timedOut.get())
+                .put("closed_offset_ms", SystemClock.elapsedRealtime() - started)
+                .put("elapsed_ms", SystemClock.elapsedRealtime() - begun)
+                .put("phase", if (operation.optString("phase") == "completed") "closed" else operation.optString("phase"))
         }
+        return operation
     }
+
+    private fun redactError(message: String?): String =
+        (message ?: "").replace(Regex("(?i)([0-9a-f]{2}:){5}[0-9a-f]{2}"), "<address>").take(256)
 
     override fun stop() {
         stopped.set(true)
