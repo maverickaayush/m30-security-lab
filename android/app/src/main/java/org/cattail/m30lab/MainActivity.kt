@@ -52,7 +52,13 @@ class MainActivity : Activity() {
     private lateinit var messageInput: EditText
     private lateinit var modeSpinner: Spinner
     private lateinit var powerSpinner: Spinner
+    private lateinit var profileSpinner: Spinner
+    private lateinit var stressStatus: TextView
+    private lateinit var stressTarget: EditText
+    private lateinit var stressController: EditText
     private lateinit var gattUi: GattLab
+    private var uiHost: LinearLayout? = null
+    private var selectedAddress: String? = null
     private var scanActive = false
     private var scanDeadline: Runnable? = null
     private var advActive = false
@@ -71,42 +77,75 @@ class MainActivity : Activity() {
         val scroll = ScrollView(this).apply { addView(root) }
         setContentView(scroll)
         title("M30 Bluetooth Research Lab")
-        button("Refresh capabilities") { showCapabilities() }
-        button("Request required permissions") { requestLabPermissions() }
-        dashboard = text("")
-        title("Scanner and advertisement inspector")
-        uuidFilter = input("Lab service UUID filter (optional)", labUuid.toString())
-        addressFilter = input("Owned fixture address filter (optional)", "")
-        button("Start scan (30 s max)") { startScan() }
-        button("STOP SCAN") { stopScan("manual stop") }
-        button("Export scan JSON") { export("application/json", "scan.json", 1) }
-        button("Export scan CSV") { export("text/csv", "scan.csv", 2) }
-        results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        root.addView(results)
-        inspection = text("No advertisement inspected yet")
-        title("Synthetic LAB advertising")
-        text("UUID $labUuid • marker LAB • one legacy set • no automatic transmission")
-        durationInput = input("Duration seconds (5–120)", "30")
-        intervalInput = input("Payload change interval ms (1000–10000)", "1000")
-        messageInput = input("LAB popup text (4 ASCII; opt-in receiver only)", "LAB")
-        modeSpinner = spinner(arrayOf("Low power", "Balanced", "Low latency"))
-        powerSpinner = spinner(arrayOf("Ultra low", "Low", "Medium", "High"))
-        button("Start single LAB advertisement") { startAdv(false) }
-        button("Start bounded LAB sequence") { startAdv(true) }
-        button("EMERGENCY STOP ALL LAB ACTIVITY") { stopEverything() }
-        title("Owned peripheral GATT and link resilience")
-        text("Select a scan result, then use explicit read/write/notify controls below. No automatic writes.")
-        gattUi = GattLab(this, root, ::log)
-        title("Event log")
-        logView = text("")
+        text("Use the sections below. The app only transmits after you press a bounded test button.")
+        section("Capability dashboard") {
+            button("Refresh capabilities") { showCapabilities() }
+            button("Request required permissions") { requestLabPermissions() }
+            dashboard = text("")
+        }
+        section("Find nearby devices") {
+            text("Select one owned lab device. BLE scans do not enumerate every Bluetooth Classic device.")
+            uuidFilter = input("Lab service UUID filter (optional)", labUuid.toString())
+            addressFilter = input("Owned fixture address filter (optional)", "")
+            button("Start scan (30 s max)") { startScan() }
+            button("STOP SCAN") { stopScan("manual stop") }
+            button("Export scan JSON") { export("application/json", "scan.json", 1) }
+            button("Export scan CSV") { export("text/csv", "scan.csv", 2) }
+            results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            add(results)
+            inspection = text("No advertisement inspected yet")
+        }
+        section("Broadcast a test signal") {
+            text("Broadcasts can be received by nearby scanners. Choosing a device does not make a broadcast private.")
+            text("UUID $labUuid • synthetic LAB marker • one legacy advertising set")
+            durationInput = input("Duration seconds (5–120)", "30")
+            intervalInput = input("Multi-profile change interval ms (1000–10000)", "1000")
+            messageInput = input("Short test marker (4 ASCII; cooperating receiver only)", "LAB")
+            profileSpinner = spinner(arrayOf("LAB-A / baseline", "LAB-B / alternate", "LAB-C / recovery"))
+            modeSpinner = spinner(arrayOf("Low power", "Balanced", "Low latency"))
+            powerSpinner = spinner(arrayOf("Ultra low", "Low", "Medium", "High"))
+            button("Start one LAB signal") { startAdv(false) }
+            button("Start multi-profile LAB mode") { startAdv(true) }
+            button("EMERGENCY STOP ALL LAB ACTIVITY") { stopEverything() }
+        }
+        section("Connect to a device") {
+            text("The selected fixture appears here. GATT writes always show a payload preview and confirmation.")
+            gattUi = GattLab(this, uiHost ?: root, ::log)
+        }
+        section("Bluetooth stress test") {
+            text("This phone has no Linux hci0. The laptop backend is a separate, explicitly invoked lab process; no phone-side disconnect is implied.")
+            stressTarget = input("Selected target address (read-only display)", "")
+            stressTarget.isEnabled = false
+            stressController = input("Laptop controller (for the CLI, usually hci0)", "hci0")
+            button("Start phone stress test") { startStress() }
+            button("Stop phone stress test") { stopStress() }
+            stressStatus = text("Unsupported: no internal Linux HCI controller")
+        }
+        section("Results and advanced details") {
+            text("Callbacks, status codes, raw bytes and cleanup events are retained here for research records.")
+            logView = text("")
+        }
         showCapabilities()
     }
 
-    private fun title(value: String) { root.addView(TextView(this).apply { text = value; textSize = 20f; setPadding(0, 22, 0, 8) }) }
-    private fun text(value: String): TextView = TextView(this).also { it.text = value; it.textSize = 14f; root.addView(it) }
-    private fun button(value: String, click: () -> Unit) { root.addView(Button(this).apply { text = value; setOnClickListener { click() } }) }
-    private fun input(hint: String, value: String) = EditText(this).also { it.hint = hint; it.setSingleLine(true); it.setText(value); root.addView(it) }
-    private fun spinner(items: Array<String>) = Spinner(this).also { it.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, items); root.addView(it) }
+    private fun add(view: View) { (uiHost ?: root).addView(view) }
+    private fun section(label: String, build: () -> Unit) {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 8, 0, 8) }
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(8, 0, 0, 0) }
+        val toggle = Button(this).apply { text = "▼ $label"; setOnClickListener {
+            body.visibility = if (body.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+            text = if (body.visibility == View.VISIBLE) "▼ $label" else "▶ $label"
+        } }
+        box.addView(toggle); box.addView(body); root.addView(box)
+        val previous = uiHost; uiHost = body
+        build()
+        uiHost = previous
+    }
+    private fun title(value: String) { add(TextView(this).apply { text = value; textSize = 20f; setPadding(0, 22, 0, 8) }) }
+    private fun text(value: String): TextView = TextView(this).also { it.text = value; it.textSize = 14f; add(it) }
+    private fun button(value: String, click: () -> Unit) { add(Button(this).apply { text = value; setOnClickListener { click() } }) }
+    private fun input(hint: String, value: String) = EditText(this).also { it.hint = hint; it.setSingleLine(true); it.setText(value); add(it) }
+    private fun spinner(items: Array<String>) = Spinner(this).also { it.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, items); add(it) }
     private fun log(value: String) {
         val line = "${stamp.format(Date())} $value"
         android.util.Log.i("M30Lab", line)
@@ -156,9 +195,15 @@ class MainActivity : Activity() {
             val raw = result.scanRecord?.bytes
             val parsed = AdvParser.parse(raw)
             val name = result.scanRecord?.deviceName ?: result.device.name ?: ""
+            val transport = when (result.device.type) {
+                BluetoothDevice.DEVICE_TYPE_LE -> "BLE"
+                BluetoothDevice.DEVICE_TYPE_DUAL -> "dual/unknown"
+                BluetoothDevice.DEVICE_TYPE_CLASSIC -> "Classic"
+                else -> "unknown"
+            }
             val item = JSONObject().put("time", stamp.format(Date())).put("address", address)
                 .put("addressType", "not exposed on Android ${Build.VERSION.SDK_INT}")
-                .put("name", name).put("rssi", result.rssi).put("rawHex", AdvParser.hex(raw))
+                .put("name", name).put("rssi", result.rssi).put("transport", transport).put("rawHex", AdvParser.hex(raw))
                 .put("serviceUuids", JSONArray(result.scanRecord?.serviceUuids?.map { it.uuid.toString() } ?: emptyList<String>()))
                 .put("manufacturerData", JSONObject().apply {
                     result.scanRecord?.manufacturerSpecificData?.let { data ->
@@ -171,8 +216,14 @@ class MainActivity : Activity() {
             if (!seen.containsKey(address)) {
                 seen[address] = result.device
                 results.addView(Button(this@MainActivity).apply {
-                    text = "Select $name [$address], RSSI ${result.rssi}"
-                    setOnClickListener { gattUi.select(result.device, name); inspection.text = item.toString(2); log("Selected owned peripheral $address") }
+                    text = "Select ${name.ifBlank { "(unnamed)" }} [$address] • $transport • RSSI ${result.rssi}"
+                    setOnClickListener {
+                        selectedAddress = address
+                        stressTarget.setText(address)
+                        gattUi.select(result.device, name)
+                        inspection.text = item.toString(2)
+                        log("Selected owned peripheral $address ($transport); Classic service support remains unverified")
+                    }
                 })
             }
             if (records.size % 10 == 1) log("Scan records ${records.size}; latest ${name.ifBlank { address }} RSSI ${result.rssi}")
@@ -200,9 +251,12 @@ class MainActivity : Activity() {
 
     private fun advData(counter: Int): AdvertiseData {
         val tag = messageInput.text.toString().toByteArray(Charsets.US_ASCII).filter { it in 0x20..0x7e }.take(4).toByteArray()
+        val profile = if (advSequence && profileSpinner.count > 0) {
+            (profileSpinner.selectedItemPosition + counter) % profileSpinner.count
+        } else 0
         return AdvertiseData.Builder()
         .addServiceUuid(ParcelUuid(labUuid))
-        .addManufacturerData(0xffff, byteArrayOf(0x4c, 0x41, 0x42, (counter and 0xff).toByte()) + tag)
+        .addManufacturerData(0xffff, byteArrayOf(0x4c, 0x41, 0x42, profile.toByte(), (counter and 0xff).toByte()) + tag)
         .setIncludeDeviceName(false).setIncludeTxPowerLevel(false).build()
     }
     private fun advSettings(): AdvertiseSettings {
@@ -250,6 +304,16 @@ class MainActivity : Activity() {
         log("Advertising stopped: $reason")
     }
     private fun stopEverything() { stopScan("emergency stop"); stopAdv("emergency stop"); gattUi.disconnect(); log("All lab activity stopped") }
+
+    private fun startStress() {
+        stressStatus.text = "Unsupported: this Android image exposes no Linux hci0. Use host/blue_stress.py only with a named owned Classic target."
+        log("Phone stress test not started: no internal Linux HCI backend; laptop execution is separate")
+    }
+
+    private fun stopStress() {
+        stressStatus.text = "Ready: no phone-side stress session exists"
+        log("Phone stress stop requested; no phone-side process was running")
+    }
 
     private fun export(type: String, filename: String, request: Int) {
         if (records.isEmpty()) { log("No scan records to export"); return }

@@ -6,6 +6,7 @@ Project for an owned Samsung SM-M305F (`m30lte`) running Android 10. The app use
 
 - `android/`: Kotlin app source and Gradle project
 - `host/`: local toolchain (ignored from Git)
+- `host/blue_stress.py`: bounded laptop-side Bluetooth Classic responsiveness harness
 - `scripts/`: reproducible setup, build, install, cleanup
 - `research/`: source-backed hardware and API notes
 - `evidence/`: private captures/logs (ignored from Git)
@@ -39,7 +40,7 @@ The app uses `targetSdk=29` for Android 10 compatibility and `compileSdk=35` wit
 
 Open the app, grant its requested permission, refresh capabilities, and select a lab test. Scanning stops at 30 seconds and stores at most 500 records. The advertising controls default to one legacy set, low-power mode, ultra-low transmit power, 30 seconds, and a one-second payload-change interval. Durations clamp to 5–120 seconds, intervals to 1–10 seconds. The emergency stop ends scanning, advertising and the app-owned GATT link. Leaving the app also stops scanning and advertising.
 
-The LAB advertisement uses service UUID `7f5f42d6-4659-4c15-9fe7-7de7a7033b01` and manufacturer test marker `LAB` with a one-byte sequence counter and optional four-byte ASCII tag under company ID `0xffff` (reserved test use). It is synthetic and non-connectable. API callback success shows stack acceptance, not a measured packet rate. Use a separate receiver for RF observations.
+The LAB advertisement uses service UUID `7f5f42d6-4659-4c15-9fe7-7de7a7033b01` and manufacturer test marker `LAB` with a profile byte, one-byte sequence counter and optional four-byte ASCII tag under company ID `0xffff` (reserved test use). Single mode uses the baseline profile; multi mode rotates the named LAB-A/B/C profiles. It is synthetic and non-connectable. API callback success shows stack acceptance, not a measured packet rate. Use a separate receiver for RF observations.
 
 The LAB marker is not a request to show a popup. Nearby devices display a
 message only when an explicitly installed, opt-in receiver understands this
@@ -76,6 +77,24 @@ and [proof-of-concept results](research/experiment-results.md). The read-only
 The proposed internal HCI kernel config and source readiness checks are in
 [kernel HCI readiness](research/kernel-hci-readiness.md). They are offline
 research artifacts; no kernel image has been installed on the phone.
+
+The source audit of the required repository and the maintained replacement
+harness are in [blue-deauth audit](research/blue-deauth-audit.md). A dry run
+checks the laptop adapter without contacting a target:
+
+```bash
+python3 host/blue_stress.py --controller hci0 \
+  --target AA:BB:CC:DD:EE:FF --mechanism l2cap-echo
+```
+
+An active run requires a named owned Bluetooth Classic target and an explicit
+`--execute`; it is capped and reports `target_effect: not_measured` until an
+independent target-side observation exists. BLE-only devices and the M30's
+Android-only controller are unsupported by this backend.
+
+REA and Ghidra records are summarized in [REA analysis](research/rea-analysis.md).
+The complete evidence JSON is ignored under `evidence/`; no vendor binary or
+pairing material belongs in Git.
 
 ## Cleanup
 

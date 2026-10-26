@@ -103,12 +103,25 @@ the system transport and is not a safe capability addition.
 ## REA decision
 
 The official [morluto/rea repository](https://github.com/morluto/rea) was read
-at revision `1173c0a9dc1b352a60943a491462294db8f353ae`. Its README and security
-instructions were reviewed. REA was not installed or invoked: the live node,
-kernel configuration, ELF symbols, and strings resolved the transport question
-without needing binary decompilation. No private binary was modified. The
+at revision `e54bf1006eadd0dfeea5c6c259cc3dc84bb414ec`. Its README and security
+instructions were reviewed. The earlier audit did not install or invoke REA;
+the follow-on audit installed it with Ghidra and recorded actual results in
+`research/rea-analysis.md`. The initial live-node, kernel-configuration, ELF
+symbol and string audit resolved the basic transport question before
+decompilation. No private binary was modified. The
 copied objects remain traceable by path, hash, and build association in local
 ignored evidence.
+
+The follow-on REA/Ghidra pass resolved the HAL-side path more precisely. In the
+copied AArch64 HAL (`0e68668c...dbe27`), the HIDL `BluetoothHci` methods call
+`VendorInterface`; the static `VendorInterface::Open` body at `0x10c108`
+loads `libbt-vendor.so` with `dlopen`, resolves
+`BLUETOOTH_VENDOR_LIB_INTERFACE`, obtains the local address, asks the vendor
+interface for file descriptors, validates the count, and builds the H4/MCT
+reader/writer protocol. The paired vendor library (`57d60dd2...561cdb`) names
+`/dev/scsc_h4_0` and the Bluetooth-address sysfs parameter. These findings
+strengthen the transport map while remaining static evidence: no live HAL
+instrumentation or second-process open was attempted.
 
 ## Capability conclusion
 

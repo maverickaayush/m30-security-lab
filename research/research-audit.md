@@ -52,9 +52,11 @@ broader capability.
 ## Scope of code review
 
 `MainActivity.kt` guards post-Android-10 API calls, bounds scanning to 30 s and
-500 entries, bounds advertising to one legacy set and 5–120 s, and stops it on
-activity teardown. `GattLab.kt` presents characteristics before intentional
-writes, requests a confirmation, and bounds three reconnect cycles to 45 s.
+500 entries, bounds advertising to one legacy set and 5–120 s, rotates three
+named profiles in multi mode, and stops it on activity teardown. Its stress
+button reports the missing phone HCI backend instead of pretending to run a
+test. `GattLab.kt` presents characteristics before intentional writes, requests
+a confirmation, and bounds three reconnect cycles to 45 s.
 `host/gatt_fixture.py` advertises only the LAB UUID for 10–120 s and records
 read/write/notification events. `host/lab_popup_receiver.py` is opt-in and
 bounds notification count and runtime. `scripts/inspect_scsc_firmware.py` is
@@ -66,3 +68,15 @@ Raw evidence remains ignored under `evidence/`; copied vendor ELFs, the firmware
 copy, Noise APKs, screenshots and capture contents must stay local. No partition
 backup was created. The public worktree contains documentation, code, hashes,
 source revisions and redacted results only.
+
+## Follow-on implementation audit (2026-10-26)
+
+| Claim | Supporting artifact | Status | Missing verification |
+| --- | --- | --- | --- |
+| REA can analyze the copied vendor ELF with a supported backend | `research/rea-analysis.md`, ignored REA JSON bundles, SHA-256 of `libbt-vendor-arm64.so` | Observed/source-backed; high confidence for this artifact | Larger exact HAL caller path and runtime trace |
+| `libbt-vendor.so` contains the SCSC H4 path identifiers | REA string evidence at `0x1007af`, `0x1007ea`, `0x102028` | Observed; high confidence for the copied ELF | Installed process call-path correlation |
+| Android HAL loads the vendor library and constructs the H4/MCT boundary | REA HAL procedure/string evidence; `VendorInterface::Open` `0x10c108` | Observed static behavior; high confidence for the copied HAL | Runtime callback/fd trace and exact boot configuration |
+| The staged SKB lifetime change is a source-level correction | Family `scsc_bluez.c`, matching `hci_core.c`, staged patch | Source-supported; not an installed-device vulnerability | Matched kernel compile and runtime handoff |
+| The phone can run Linux BlueZ now | Live `/proc/config.gz` and interface inventory | Unsupported on current image; high confidence | A future matched kernel build could change this |
+| The laptop backend can run a bounded protocol experiment | `host/blue_stress.py`, 7 unit tests, real adapter dry-run | Implemented and dry-run verified; target effect untested | Named target, service inventory, independent connection observation |
+| New UI has single and multi-profile LAB controls | APK build/install, live UI hierarchy, callback log | Observed on handset; callback only | Independent receiver during this exact revision |

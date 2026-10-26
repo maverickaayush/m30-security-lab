@@ -21,20 +21,20 @@ revision for Samsung-family paths is
 ## Firmware and REA choice
 
 The official [`morluto/rea`](https://github.com/morluto/rea) HEAD was verified as
-`1173c0a9dc1b352a60943a491462294db8f353ae`. Its
-[README](https://github.com/morluto/rea/blob/1173c0a9dc1b352a60943a491462294db8f353ae/README.md),
-[installation guide](https://github.com/morluto/rea/blob/1173c0a9dc1b352a60943a491462294db8f353ae/docs/installation.md)
+`e54bf1006eadd0dfeea5c6c259cc3dc84bb414ec`. Its
+[README](https://github.com/morluto/rea/blob/e54bf1006eadd0dfeea5c6c259cc3dc84bb414ec/README.md),
+[installation guide](https://github.com/morluto/rea/blob/e54bf1006eadd0dfeea5c6c259cc3dc84bb414ec/docs/installation.md)
 and [security policy](https://github.com/morluto/rea/security) were read. REA
 needs a supported Node runtime and a separately installed Ghidra/Hopper/IDA
-backend for native binary analysis. Host Node was `v22.23.2`; current REA
-README requires `>=22.23.4` in the 22.x line. No Ghidra binary was found, and
-REA does not install it. The local persistent disk had ~701 MiB free. The
-concrete `smxf` header question was answered more directly with matching
-source and a validated parser, so no installer or Codex configuration change
-was justified. For later disassembly, stage a supported backend and Node in
-project-local or temporary space, inspect `rea setup`'s plan, and retain the
-private firmware copy/hash. Do not present raw firmware as an ELF or assume
-Ghidra autodetects its R4/M4 mapping. The same-user provider is not a sandbox.
+backend for native binary analysis. The earlier audit saw host Node `v22.23.2`
+and no Ghidra; the follow-on audit used isolated Node `v24.22.1`, REA `6.8.0`
+and Ghidra `12.1.4`. The concrete `smxf` header question was answered more
+directly with matching
+source and a validated parser. The follow-on installer was project-local and
+did not change Codex configuration; the resulting operations and limitations
+are recorded in `research/rea-analysis.md`. Do not present raw firmware as an
+ELF or assume Ghidra autodetects its R4/M4 mapping. The same-user provider is
+not a sandbox.
 
 ## Hardware map and precise blockers
 

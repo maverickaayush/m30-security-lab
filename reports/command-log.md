@@ -35,7 +35,7 @@ from tracked documentation. Full raw logs and screenshots remain ignored under
 | `python3 scripts/inspect_scsc_firmware.py evidence/mx140.bin` | Exit 0; header, constant and full-image CRCs match copied image |
 | `python3 -m unittest discover -s tests -p 'test_scsc_firmware.py' -v` | Exit 0; synthetic corruption and bounds test passed |
 | `python3 host/gatt_fixture.py --seconds 120` plus explicit phone UI scan/connect/subscribe/write/unsubscribe/three-cycle sequence | Exit 0; fixture logged two confirmed writes, notification subscription and bounded shutdown; phone reported 3/3 cycles status 0 |
-| `git ls-remote` official REA and M30-family source | Exit 0; revisions `1173c0a9dc1b352a60943a491462294db8f353ae` and `095206579f69121278ed1dd5fd0d7975c0705c6a` |
+| Earlier `git ls-remote` audit of REA and M30-family source | Exit 0; prior REA revision `1173c0a9dc1b352a60943a491462294db8f353ae`; M30 family `095206579f69121278ed1dd5fd0d7975c0705c6a` |
 | Samsung OSRC direct M305F search | HTTP 403; no exact stock source was acquired |
 
 The host fixture and receiver use bounded timeouts. ADB helper commands use
@@ -43,3 +43,21 @@ explicit `timeout` wrappers where a device or UI operation could hang.
 Audit tool versions: Python 3.14.4, Node 22.23.2, npm 10.9.8, ADB 34.0.5,
 BlueZ 5.85, Wireshark 4.6.4, Git 2.53.0. All primary URLs and their role are
 listed in `research/sources.md` and `research/prior-art.md`.
+## 2026-10-26 continuation
+
+| Command/tool | Result |
+| --- | --- |
+| `node-v24.22.1/bin/node --version` | `v24.22.1` |
+| `node-v24.22.1/bin/npm --version` | `11.19.1` |
+| `rea --version` | `6.8.0` |
+| REA official revision | `e54bf1006eadd0dfeea5c6c259cc3dc84bb414ec` |
+| Ghidra release/hash | `12.1.4`, SHA-256 `ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db` |
+| `rea doctor --json` with local Ghidra/Java | Ghidra, headless, native decompiler, Java 21 healthy; client config drift reported and left untouched |
+| `python3 -m unittest discover -v tests` | 7 passed |
+| `./scripts/build.sh` | success; final APK SHA-256 `3c65c58b014d44bc17cb8c8cd1ae0daed2f0eba6aa2d054e193787a0e7fc2ab0` |
+| serial-pinned streamed install | success on Android package `org.cattail.m30lab` |
+| `host/blue_stress.py` dry-run | `ready_dry_run`; laptop adapter readable; no target request |
+| REA/Ghidra HAL analysis | `vendor-bt-hal-arm64.so` AArch64; 615 procedures/363 strings; `VendorInterface::Open` body `0x10c108` statically resolves `dlopen`/`dlsym` vendor loading, fd validation and H4/MCT setup |
+
+The REA command outputs and hashes are retained in ignored `evidence/` files;
+the vendor ELFs and firmware image remain private.

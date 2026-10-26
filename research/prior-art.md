@@ -32,8 +32,8 @@ The public M30-family repository's current HEAD is `0952065`, advertises GCC
 The [TeamWin M30 device tree](https://github.com/TeamWin/android_device_samsung_m30lte)
 links that kernel but does not validate this running recovery. Official
 [Samsung OSRC](https://opensource.samsung.com/) remains the required exact
-source provider. The inspected [REA repo](https://github.com/morluto/rea)
-current HEAD is `1173c0a9dc1b352a60943a491462294db8f353ae`; its presence
+source provider. The inspected [REA repo](https://github.com/morluto/rea) is
+pinned to audited revision `e54bf1006eadd0dfeea5c6c259cc3dc84bb414ec`; its presence
 as a tool is not prior evidence of M30 firmware support. No maintained bridge
 or completed SCSC BlueZ port on this exact build was established by this
 search, which is a scoped search result rather than a nonexistence proof.

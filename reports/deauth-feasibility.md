@@ -67,3 +67,16 @@ non-consenting receiver would require a product-specific protocol, pairing
 workflow, or vulnerability. The app therefore has no popup-spam or pairing
 impersonation mode. A safe extension is an opt-in receiver app or fixture that
 recognizes the project UUID and renders a clearly labeled LAB message.
+
+## Bounded blue-deauth adaptation
+
+The pinned `its0x08/blue-deauth` scripts were audited in
+`research/blue-deauth-audit.md`. Their L2CAP echo and RFCOMM loops are
+Bluetooth Classic traffic generators with no independent target-effect
+measurement. `host/blue_stress.py` replaces the unbounded shell loops with a
+single baseline request, explicit controller and target, RFCOMM service check,
+deadlines, structured arguments, process-group cleanup and JSON results. A
+real laptop `hci0` dry-run completed without sending a target request. No
+target-specific run was performed because the target model/firmware and its
+existing connection were not identified. The backend therefore establishes a
+repeatable stress-test harness, not a general deauthentication capability.

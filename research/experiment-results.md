@@ -87,3 +87,29 @@ use a receiver with explicit scan-event timestamps or a suitable BLE sniffer,
 multiple randomized trials, clock alignment, and a quiet-channel control.
 The GATT fixture experiment should be repeated across firmware versions and
 longer sessions before generalizing reliability.
+
+## 2026-10-26 app revision and bounded backend
+
+The revised Android UI was built with `./scripts/build.sh`, installed with the
+serial-pinned `./scripts/install.sh YOUR_ADB_SERIAL`, and launched without a
+runtime exception. Final APK SHA-256:
+
+`3c65c58b014d44bc17cb8c8cd1ae0daed2f0eba6aa2d054e193787a0e7fc2ab0`
+
+The live capability dashboard reported Android 10 / SDK 29, Bluetooth enabled,
+BLE scanner and advertiser available, multiple advertising supported, extended
+advertising false, and a 31-byte maximum. The hierarchy exposed the new
+sections for capability dashboard, nearby-device selection, broadcast, GATT,
+stress-test status, and results/advanced details.
+
+One single LAB run produced an Android advertiser callback success and was
+stopped by the emergency button after about two seconds. One multi-profile run
+produced four successive callback successes (payload counters 0–3) and was
+stopped after about three seconds. These are Android callback observations;
+this run did not have an independent receiver recording, so it is not a packet
+count or an over-the-air proof. The app logged cleanup for both runs.
+
+The laptop backend dry-run used a placeholder address only to avoid selecting a
+real target. It read the laptop's `hci0` successfully, emitted a structured
+`ready_dry_run` result, and sent no L2CAP or RFCOMM request. The backend unit
+suite and existing firmware-inspector tests passed: 7 tests, 0 failures.

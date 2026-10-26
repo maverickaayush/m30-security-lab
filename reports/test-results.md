@@ -12,7 +12,8 @@ are in ignored `evidence/` for local review.
 | `.../gradle --no-daemon testDebugUnitTest` | `BUILD SUCCESSFUL`; parser truncation and JSON/CSV quoting tests passed |
 | `./scripts/build.sh` | `BUILD SUCCESSFUL` |
 | `./scripts/install.sh <pinned serial>` | `Success`; package `org.cattail.m30lab` installed without replacing an unrelated package |
-| latest APK SHA-256 | `19bd828132a48c39695b2be1a948438b00ea87bd70f7374ba84dde7873028d06` |
+| earlier APK SHA-256 (historical run) | `19bd828132a48c39695b2be1a948438b00ea87bd70f7374ba84dde7873028d06` |
+| final APK SHA-256 | `3c65c58b014d44bc17cb8c8cd1ae0daed2f0eba6aa2d054e193787a0e7fc2ab0` |
 
 The app was launched from ADB. It does not contain a boot receiver and did not
 start RF transmission on install or launch.
