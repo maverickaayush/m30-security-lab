@@ -24,6 +24,7 @@ from tracked documentation. Full raw logs and screenshots remain ignored under
 | `python3 host/lab_popup_receiver.py --seconds 35` with phone LAB text `PING` | Exit 0; matched one marker, called `notify-send`, popup exit 0, stopped at 35 seconds |
 | `hciconfig hci0 version`; `bluetoothctl show` | Exit 0; external Realtek USB controller, HCI 5.3, BlueZ powered with zero active advertising instances |
 | `dpkg-query` / `command -v` for BlueZ tools; Android `dumpsys usb` | Host BlueZ 5.85, `btmon`, `btmgmt`, and Wireshark present; phone USB host mode inactive with zero attached USB devices |
+| Targeted kernel config, `/dev/scsc_h4_0` ownership, and HAL file descriptors | `CONFIG_BT`/`CONFIG_USB_OTG` unset; HAL PID owns `/dev/scsc_h4_0` at fd 6; SELinux enforcing; no second-process access attempted |
 | Android SDK `dexdump` on Noise `classes2.dex` | Exit 0; extracted candidate BES TOTA UUIDs and OTA method/string call paths; no popup/deauth path found |
 | Rebuilt `./scripts/build.sh` and `./scripts/install.sh <serial>` | Exit 0; APK SHA-256 `19bd828132a48c39695b2be1a948438b00ea87bd70f7374ba84dde7873028d06` |
 

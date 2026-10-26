@@ -59,6 +59,29 @@ phone's USB state reported `host_connected=false`, `UsbDevices: 0`, and
 BlueZ userspace binary on Android would not add an HCI kernel driver or replace
 the vendor HAL, so it was not attempted.
 
+## Workaround audit
+
+The read-only kernel configuration shows `CONFIG_USB=y` and an XHCI platform
+host controller, but `CONFIG_USB_OTG` is unset, `CONFIG_BT` is unset, and no
+USB Bluetooth transport driver such as `btusb` is built. The running Android
+USB manager also reported no attached host devices. An external adapter would
+therefore require all of the following: a compatible OTG/power setup, a kernel
+with USB host mode and a Bluetooth transport driver, and a controller owner
+that does not conflict with Android's HAL. This build supplies none of those
+Bluetooth pieces.
+
+The HAL process currently owns the internal transport: its file descriptor 6
+points to `/dev/scsc_h4_0`, and the node is labeled `sec_radio_device` under
+enforcing SELinux. Reading or writing that node from a second process would
+consume or inject H4 bytes into the live system transport. It was not touched.
+
+A future research image could use a separately matched kernel and an external
+controller, or a dedicated USB/radio board attached to the laptop. Those paths
+would create another controller with its own connection handles; they would
+still provide local controller operations and captures, not a universal
+disconnect operation for links owned by other controllers. No partition,
+recovery, bootloader, or kernel change was made here.
+
 ## Matching source comparison
 
 The public M30-family kernel tree
