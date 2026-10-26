@@ -1129,10 +1129,10 @@ index 0000000..6ca8565
 +    main()
 diff --git a/reports/command-log.md b/reports/command-log.md
 new file mode 100644
-index 0000000..d6e1ab7
+index 0000000..64f068f
 --- /dev/null
 +++ b/reports/command-log.md
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,31 @@
 +# Command and tool log
 +
 +Recorded 2026-10-26 (Asia/Kolkata). The ADB serial is intentionally omitted
@@ -1158,6 +1158,7 @@ index 0000000..d6e1ab7
 +| Noise package paths, `dumpsys package`, APK pull, `aapt dump`, `dexdump` | Exit 0; static result in `research/noise-firmware.md` |
 +| `python3 host/lab_popup_receiver.py --seconds 35` with phone LAB text `PING` | Exit 0; matched one marker, called `notify-send`, popup exit 0, stopped at 35 seconds |
 +| `hciconfig hci0 version`; `bluetoothctl show` | Exit 0; external Realtek USB controller, HCI 5.3, BlueZ powered with zero active advertising instances |
++| `dpkg-query` / `command -v` for BlueZ tools; Android `dumpsys usb` | Host BlueZ 5.85, `btmon`, `btmgmt`, and Wireshark present; phone USB host mode inactive with zero attached USB devices |
 +| Android SDK `dexdump` on Noise `classes2.dex` | Exit 0; extracted candidate BES TOTA UUIDs and OTA method/string call paths; no popup/deauth path found |
 +| Rebuilt `./scripts/build.sh` and `./scripts/install.sh <serial>` | Exit 0; APK SHA-256 `19bd828132a48c39695b2be1a948438b00ea87bd70f7374ba84dde7873028d06` |
 +
@@ -1406,10 +1407,10 @@ index 0000000..705e9f2
 +HCI snoop records the phone host/controller interface. It is not a promiscuous over-the-air capture of unrelated links. A separate owned BLE receiver or purpose-built sniffer is needed for independent RF confirmation. The laptop's `btusb` receiver can confirm received advertisements; it is not a raw link-layer sniffer for other connections. See [AOSP Bluetooth verification and debugging](https://source.android.com/docs/core/connect/bluetooth/verifying_debugging).
 diff --git a/research/hardware-reverse-engineering.md b/research/hardware-reverse-engineering.md
 new file mode 100644
-index 0000000..91c0dc3
+index 0000000..fc0cd77
 --- /dev/null
 +++ b/research/hardware-reverse-engineering.md
-@@ -0,0 +1,95 @@
+@@ -0,0 +1,102 @@
 +# Hardware and transport reverse engineering
 +
 +Date: 2026-10-26 (Asia/Kolkata)
@@ -1463,6 +1464,13 @@ index 0000000..91c0dc3
 +fixture tests. It is a laptop controller, not a path into the phone's SCSC
 +controller. The `host/lab_popup_receiver.py` test used it to receive the M30
 +LAB marker and trigger one desktop notification.
++
++The laptop already has BlueZ 5.85, `bluetoothctl`, `btmgmt`, `btmon`,
++`python3-dbus`, and Wireshark 4.6.4. No host installation was needed. The
++phone's USB state reported `host_connected=false`, `UsbDevices: 0`, and
++`mtp,adb`; no external controller was attached to the handset. Installing a
++BlueZ userspace binary on Android would not add an HCI kernel driver or replace
++the vendor HAL, so it was not attempted.
 +
 +## Matching source comparison
 +
