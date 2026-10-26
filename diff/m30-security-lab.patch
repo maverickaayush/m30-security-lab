@@ -1129,10 +1129,10 @@ index 0000000..6ca8565
 +    main()
 diff --git a/reports/command-log.md b/reports/command-log.md
 new file mode 100644
-index 0000000..64f068f
+index 0000000..06b2f7d
 --- /dev/null
 +++ b/reports/command-log.md
-@@ -0,0 +1,31 @@
+@@ -0,0 +1,32 @@
 +# Command and tool log
 +
 +Recorded 2026-10-26 (Asia/Kolkata). The ADB serial is intentionally omitted
@@ -1159,6 +1159,7 @@ index 0000000..64f068f
 +| `python3 host/lab_popup_receiver.py --seconds 35` with phone LAB text `PING` | Exit 0; matched one marker, called `notify-send`, popup exit 0, stopped at 35 seconds |
 +| `hciconfig hci0 version`; `bluetoothctl show` | Exit 0; external Realtek USB controller, HCI 5.3, BlueZ powered with zero active advertising instances |
 +| `dpkg-query` / `command -v` for BlueZ tools; Android `dumpsys usb` | Host BlueZ 5.85, `btmon`, `btmgmt`, and Wireshark present; phone USB host mode inactive with zero attached USB devices |
++| Targeted kernel config, `/dev/scsc_h4_0` ownership, and HAL file descriptors | `CONFIG_BT`/`CONFIG_USB_OTG` unset; HAL PID owns `/dev/scsc_h4_0` at fd 6; SELinux enforcing; no second-process access attempted |
 +| Android SDK `dexdump` on Noise `classes2.dex` | Exit 0; extracted candidate BES TOTA UUIDs and OTA method/string call paths; no popup/deauth path found |
 +| Rebuilt `./scripts/build.sh` and `./scripts/install.sh <serial>` | Exit 0; APK SHA-256 `19bd828132a48c39695b2be1a948438b00ea87bd70f7374ba84dde7873028d06` |
 +
@@ -1407,10 +1408,10 @@ index 0000000..705e9f2
 +HCI snoop records the phone host/controller interface. It is not a promiscuous over-the-air capture of unrelated links. A separate owned BLE receiver or purpose-built sniffer is needed for independent RF confirmation. The laptop's `btusb` receiver can confirm received advertisements; it is not a raw link-layer sniffer for other connections. See [AOSP Bluetooth verification and debugging](https://source.android.com/docs/core/connect/bluetooth/verifying_debugging).
 diff --git a/research/hardware-reverse-engineering.md b/research/hardware-reverse-engineering.md
 new file mode 100644
-index 0000000..fc0cd77
+index 0000000..695a2e9
 --- /dev/null
 +++ b/research/hardware-reverse-engineering.md
-@@ -0,0 +1,102 @@
+@@ -0,0 +1,125 @@
 +# Hardware and transport reverse engineering
 +
 +Date: 2026-10-26 (Asia/Kolkata)
@@ -1471,6 +1472,29 @@ index 0000000..fc0cd77
 +`mtp,adb`; no external controller was attached to the handset. Installing a
 +BlueZ userspace binary on Android would not add an HCI kernel driver or replace
 +the vendor HAL, so it was not attempted.
++
++## Workaround audit
++
++The read-only kernel configuration shows `CONFIG_USB=y` and an XHCI platform
++host controller, but `CONFIG_USB_OTG` is unset, `CONFIG_BT` is unset, and no
++USB Bluetooth transport driver such as `btusb` is built. The running Android
++USB manager also reported no attached host devices. An external adapter would
++therefore require all of the following: a compatible OTG/power setup, a kernel
++with USB host mode and a Bluetooth transport driver, and a controller owner
++that does not conflict with Android's HAL. This build supplies none of those
++Bluetooth pieces.
++
++The HAL process currently owns the internal transport: its file descriptor 6
++points to `/dev/scsc_h4_0`, and the node is labeled `sec_radio_device` under
++enforcing SELinux. Reading or writing that node from a second process would
++consume or inject H4 bytes into the live system transport. It was not touched.
++
++A future research image could use a separately matched kernel and an external
++controller, or a dedicated USB/radio board attached to the laptop. Those paths
++would create another controller with its own connection handles; they would
++still provide local controller operations and captures, not a universal
++disconnect operation for links owned by other controllers. No partition,
++recovery, bootloader, or kernel change was made here.
 +
 +## Matching source comparison
 +
