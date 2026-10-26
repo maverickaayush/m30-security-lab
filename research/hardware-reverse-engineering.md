@@ -52,6 +52,13 @@ fixture tests. It is a laptop controller, not a path into the phone's SCSC
 controller. The `host/lab_popup_receiver.py` test used it to receive the M30
 LAB marker and trigger one desktop notification.
 
+The laptop already has BlueZ 5.85, `bluetoothctl`, `btmgmt`, `btmon`,
+`python3-dbus`, and Wireshark 4.6.4. No host installation was needed. The
+phone's USB state reported `host_connected=false`, `UsbDevices: 0`, and
+`mtp,adb`; no external controller was attached to the handset. Installing a
+BlueZ userspace binary on Android would not add an HCI kernel driver or replace
+the vendor HAL, so it was not attempted.
+
 ## Matching source comparison
 
 The public M30-family kernel tree
