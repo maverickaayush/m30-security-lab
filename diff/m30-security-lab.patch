@@ -28,10 +28,10 @@ index 0000000..76c69fe
 +*.log
 diff --git a/README.md b/README.md
 new file mode 100644
-index 0000000..874720b
+index 0000000..8fb0ee0
 --- /dev/null
 +++ b/README.md
-@@ -0,0 +1,74 @@
+@@ -0,0 +1,78 @@
 +# M30 Bluetooth Security Lab
 +
 +Project for an owned Samsung SM-M305F (`m30lte`) running Android 10. The app uses Android Bluetooth APIs and never transmits on install or boot. Keep all RF tests inside the isolated lab; advertisements are broadcasts and cannot be contained by an address allowlist.
@@ -97,6 +97,10 @@ index 0000000..874720b
 +on this phone cannot carry an arbitrary-length message alongside the LAB UUID.
 +
 +See [device capabilities](reports/device-capabilities.md), [test results](reports/test-results.md), [capture workflow](research/capture.md), [transport reverse engineering](research/hardware-reverse-engineering.md), [Noise package inspection](research/noise-firmware.md), and [disconnect feasibility](reports/deauth-feasibility.md).
++
++The proposed internal HCI kernel config and source readiness checks are in
++[kernel HCI readiness](research/kernel-hci-readiness.md). They are offline
++research artifacts; no kernel image has been installed on the phone.
 +
 +## Cleanup
 +
@@ -1129,10 +1133,10 @@ index 0000000..6ca8565
 +    main()
 diff --git a/reports/command-log.md b/reports/command-log.md
 new file mode 100644
-index 0000000..06b2f7d
+index 0000000..290bc71
 --- /dev/null
 +++ b/reports/command-log.md
-@@ -0,0 +1,32 @@
+@@ -0,0 +1,34 @@
 +# Command and tool log
 +
 +Recorded 2026-10-26 (Asia/Kolkata). The ADB serial is intentionally omitted
@@ -1160,6 +1164,8 @@ index 0000000..06b2f7d
 +| `hciconfig hci0 version`; `bluetoothctl show` | Exit 0; external Realtek USB controller, HCI 5.3, BlueZ powered with zero active advertising instances |
 +| `dpkg-query` / `command -v` for BlueZ tools; Android `dumpsys usb` | Host BlueZ 5.85, `btmon`, `btmgmt`, and Wireshark present; phone USB host mode inactive with zero attached USB devices |
 +| Targeted kernel config, `/dev/scsc_h4_0` ownership, and HAL file descriptors | `CONFIG_BT`/`CONFIG_USB_OTG` unset; HAL PID owns `/dev/scsc_h4_0` at fd 6; SELinux enforcing; no second-process access attempted |
++| Family `scsc_bt` Kconfig/Makefile/bridge and M30 defconfig read | Source-supported internal HCI path found; config fragment created; exact firmware source and build toolchain unavailable, so no kernel artifact was installed |
++| `git apply --check research/kernel/scsc_bluez-send-lifetime.patch` against family `scsc_bluez.c` | Exit 0; patch applies to source revision `0952065`; compilation and runtime remain untested |
 +| Android SDK `dexdump` on Noise `classes2.dex` | Exit 0; extracted candidate BES TOTA UUIDs and OTA method/string call paths; no popup/deauth path found |
 +| Rebuilt `./scripts/build.sh` and `./scripts/install.sh <serial>` | Exit 0; APK SHA-256 `19bd828132a48c39695b2be1a948438b00ea87bd70f7374ba84dde7873028d06` |
 +
@@ -1408,10 +1414,10 @@ index 0000000..705e9f2
 +HCI snoop records the phone host/controller interface. It is not a promiscuous over-the-air capture of unrelated links. A separate owned BLE receiver or purpose-built sniffer is needed for independent RF confirmation. The laptop's `btusb` receiver can confirm received advertisements; it is not a raw link-layer sniffer for other connections. See [AOSP Bluetooth verification and debugging](https://source.android.com/docs/core/connect/bluetooth/verifying_debugging).
 diff --git a/research/hardware-reverse-engineering.md b/research/hardware-reverse-engineering.md
 new file mode 100644
-index 0000000..695a2e9
+index 0000000..ed0584e
 --- /dev/null
 +++ b/research/hardware-reverse-engineering.md
-@@ -0,0 +1,125 @@
+@@ -0,0 +1,126 @@
 +# Hardware and transport reverse engineering
 +
 +Date: 2026-10-26 (Asia/Kolkata)
@@ -1476,13 +1482,12 @@ index 0000000..695a2e9
 +## Workaround audit
 +
 +The read-only kernel configuration shows `CONFIG_USB=y` and an XHCI platform
-+host controller, but `CONFIG_USB_OTG` is unset, `CONFIG_BT` is unset, and no
-+USB Bluetooth transport driver such as `btusb` is built. The running Android
-+USB manager also reported no attached host devices. An external adapter would
-+therefore require all of the following: a compatible OTG/power setup, a kernel
-+with USB host mode and a Bluetooth transport driver, and a controller owner
-+that does not conflict with Android's HAL. This build supplies none of those
-+Bluetooth pieces.
++host controller; `CONFIG_USB_OTG` and `CONFIG_BT` are unset, and no USB
++Bluetooth transport driver such as `btusb` is built. The Android USB manager
++reported a dual-role port but no attached host devices. `CONFIG_USB_OTG` being
++unset does not by itself rule out USB host operation on this build. An external
++adapter would need a powered/compatible host setup and a Bluetooth transport
++driver, neither of which has been verified on the handset.
 +
 +The HAL process currently owns the internal transport: its file descriptor 6
 +points to `/dev/scsc_h4_0`, and the node is labeled `sec_radio_device` under
@@ -1509,9 +1514,11 @@ index 0000000..695a2e9
 +
 +The source comparison explains why a future custom kernel could expose a
 +BlueZ/HCI path, but that would be a new kernel and controller ownership model.
-+This task deliberately did not install or build one. Directly opening the H4
-+character device while Android owns the HAL would race the system transport and
-+is not a safe capability addition.
++A reviewable config fragment and build-readiness audit are in
++`research/kernel-hci-readiness.md`. The exact matching source, compiler, disk
++space, and controller handoff are not yet available for a validated build.
++Directly opening the H4 character device while Android owns the HAL would race
++the system transport and is not a safe capability addition.
 +
 +## REA decision
 +
@@ -1537,6 +1544,121 @@ index 0000000..695a2e9
 +documented raw-HCI support. Neither should be introduced by replacing the
 +phone's kernel or by sharing its internal controller with BlueZ during this
 +project.
+diff --git a/research/kernel-hci-readiness.md b/research/kernel-hci-readiness.md
+new file mode 100644
+index 0000000..2f69f03
+--- /dev/null
++++ b/research/kernel-hci-readiness.md
+@@ -0,0 +1,63 @@
++# Internal HCI build readiness
++
++Checked 2026-10-26 on Samsung SM-M305F, firmware `M305FDDS8CVB2`, kernel
++`4.4.177-22392479` (2022-02-21). No kernel or partition was changed.
++
++The family source at revision
++[`0952065`](https://github.com/akhil1999/android_kernel_samsung_m30lte/tree/095206579f69121278ed1dd5fd0d7975c0705c6a)
++contains a genuine SCSC BlueZ bridge. Its
++[`Kconfig`](https://github.com/akhil1999/android_kernel_samsung_m30lte/blob/095206579f69121278ed1dd5fd0d7975c0705c6a/drivers/misc/samsung/scsc_bt/Kconfig)
++defines `SCSC_BT_BLUEZ`, and its
++[`Makefile`](https://github.com/akhil1999/android_kernel_samsung_m30lte/blob/095206579f69121278ed1dd5fd0d7975c0705c6a/drivers/misc/samsung/scsc_bt/Makefile)
++adds `scsc_bluez.o` to the existing `scsc_bt` object. In
++[`scsc_bluez.c`](https://github.com/akhil1999/android_kernel_samsung_m30lte/blob/095206579f69121278ed1dd5fd0d7975c0705c6a/drivers/misc/samsung/scsc_bt/scsc_bluez.c),
++the bridge registers an `hci_dev` and exchanges H4 frames through the SCSC
++driver file operations. The source's
++[`net/bluetooth/Kconfig`](https://github.com/akhil1999/android_kernel_samsung_m30lte/blob/095206579f69121278ed1dd5fd0d7975c0705c6a/net/bluetooth/Kconfig)
++shows that Linux Bluetooth core support is a separate `CONFIG_BT` dependency.
++
++The project now has a minimal proposed config fragment in
++`research/kernel/m30lte-hci.fragment`. Its purpose is to make the required
++configuration change reviewable. It is not a tested build. It does not include
++USB `btusb`, since the proposed path uses the internal SCSC controller.
++
++## Build gates found
++
++1. The running kernel has `# CONFIG_BT is not set` and
++   `# CONFIG_SCSC_BT_BLUEZ is not set`; both require a new kernel build.
++2. An exact Samsung kernel source package for `M305FDDS8CVB2` has not been
++   obtained. The family source uses `CONFIG_SCSC_DEBUG=y` in its M30 defconfig,
++   while the running kernel has it disabled, proving at least one configuration
++   difference. Build compatibility is therefore unverified.
++3. The local host has no ARM64 cross compiler and only about 703 MiB of
++   persistent filesystem space free. `/tmp` is a volatile tmpfs with about
++   7.1 GiB free, which could stage an experimental compile, but no exact
++   source package is available to build and validate an installable image.
++4. The active Android Bluetooth HAL owns `/dev/scsc_h4_0`. The SCSC BlueZ bridge
++   calls the same driver's open/read/write operations, so a future runtime
++   must assign the controller to one stack at a time and provide compatible
++   service startup and SELinux policy. Merely enabling config symbols would
++   not make Android and BlueZ concurrent owners.
++5. The family `scsc_bluez.c` appears to access `skb->len` and packet type after
++   `kfree_skb(skb)` in its send callback (lines 139-155). That source needs
++   review and correction before it is suitable for a research build. A minimal
++   source patch is staged at `research/kernel/scsc_bluez-send-lifetime.patch`;
++   it moves the free after the last read of `skb`. `git apply --check` passed
++   against the family source at revision `0952065`; the patch remains unbuilt.
++   This is a source observation, not a proven defect in the installed kernel,
++   because the bridge is disabled on the phone.
++
++The current phone's USB manager reports a dual-role port and the kernel has
++`CONFIG_USB_XHCI_HCD=y`; `CONFIG_USB_OTG` being unset alone does **not** prove
++USB host mode is unavailable. No adapter or powered OTG fixture was attached,
++so external-controller operation on the phone remains untested. The laptop's
++Realtek `btusb` adapter remains the working Linux HCI controller.
++
++## What an internal HCI build would add
++
++It would expose the SCSC controller to Linux HCI tools for raw local controller
++commands, local connection measurement, and HCI monitoring when BlueZ is the
++owner. It would not give that controller handles for links between two other
++devices, an area-wide disconnect command, or a way to force UI on nearby
++receivers. Those outcomes require a specific affected target/protocol or a
++cooperating receiver.
+diff --git a/research/kernel/m30lte-hci.fragment b/research/kernel/m30lte-hci.fragment
+new file mode 100644
+index 0000000..d7b4eff
+--- /dev/null
++++ b/research/kernel/m30lte-hci.fragment
+@@ -0,0 +1,8 @@
++# Research fragment for a SOURCE-MATCHED M305FDDS8CVB2 kernel tree.
++# This file is not a bootable image and has not been applied to the phone.
++# Build the Linux Bluetooth core and the SCSC HCI bridge into the kernel.
++CONFIG_BT=y
++CONFIG_BT_BREDR=y
++CONFIG_BT_LE=y
++CONFIG_SCSC_BT=y
++CONFIG_SCSC_BT_BLUEZ=y
+diff --git a/research/kernel/scsc_bluez-send-lifetime.patch b/research/kernel/scsc_bluez-send-lifetime.patch
+new file mode 100644
+index 0000000..791c83c
+--- /dev/null
++++ b/research/kernel/scsc_bluez-send-lifetime.patch
+@@ -0,0 +1,26 @@
++diff --git a/drivers/misc/samsung/scsc_bt/scsc_bluez.c b/drivers/misc/samsung/scsc_bt/scsc_bluez.c
++--- a/drivers/misc/samsung/scsc_bt/scsc_bluez.c
+++++ b/drivers/misc/samsung/scsc_bt/scsc_bluez.c
++@@ -139,9 +139,7 @@ static int slsi_bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
++ 	ret = bt_fs->write(NULL, skb->data, skb->len, NULL);
++ 	if (ret >= 0) {
++-		kfree_skb(skb);
++-
++ 		/* Update HCI stat counters */
++ 		hdev->stat.byte_tx += skb->len;
++ 
++ 		switch (hci_skb_pkt_type(skb)) {
++ 			case HCI_COMMAND_PKT:
++@@ -153,10 +151,12 @@ static int slsi_bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
++ 				break;
++ 
++ 			case HCI_SCODATA_PKT:
++ 				hdev->stat.sco_tx++;
++ 				break;
++ 		}
+++
+++		kfree_skb(skb);
++ 	}
++ 
++ 	return ret;
++ }
 diff --git a/research/noise-firmware.md b/research/noise-firmware.md
 new file mode 100644
 index 0000000..adc7a38
@@ -1653,10 +1775,10 @@ index 0000000..adc7a38
 +available for an offline firmware audit.
 diff --git a/research/sources.md b/research/sources.md
 new file mode 100644
-index 0000000..43f3d80
+index 0000000..66b4425
 --- /dev/null
 +++ b/research/sources.md
-@@ -0,0 +1,24 @@
+@@ -0,0 +1,25 @@
 +# Primary sources and claim status
 +
 +Checked 2026-10-26.
@@ -1673,6 +1795,7 @@ index 0000000..43f3d80
 +| [Samsung Open Source Release Center](https://opensource.samsung.com/) | exact kernel/source lookup | public portal checked; exact installed firmware source match remains unknown |
 +| [Samsung SM-M305F update history](https://doc.samsungmobile.com/SM-M305F/006517190527/wel.html) | build association for `M305FDDS8CVB2` | Samsung's device page lists Android 10 and the 2022-03-01 security patch for this build |
 +| [M30-family kernel tree](https://github.com/akhil1999/android_kernel_samsung_m30lte/tree/095206579f69121278ed1dd5fd0d7975c0705c6a) | SCSC path comparison | public family source, not confirmed exact build |
++| [M30-family SCSC BlueZ bridge](https://github.com/akhil1999/android_kernel_samsung_m30lte/blob/095206579f69121278ed1dd5fd0d7975c0705c6a/drivers/misc/samsung/scsc_bt/scsc_bluez.c) and [Linux Bluetooth Kconfig](https://github.com/akhil1999/android_kernel_samsung_m30lte/blob/095206579f69121278ed1dd5fd0d7975c0705c6a/net/bluetooth/Kconfig) | internal HCI build readiness | source confirms HCI registration and `CONFIG_BT`; exact installed kernel source still unavailable |
 +| [Kali NetHunter Bluetooth Arsenal](https://www.kali.org/docs/nethunter/nethunter-btarsenal/) | external/raw-controller requirements | official NetHunter documentation; no requirement demonstrated here |
 +| [REA repository](https://github.com/morluto/rea) and [REA security policy](https://github.com/morluto/rea/security) | reverse-engineering workflow and handling boundary | official repository read; not installed or invoked |
 +| [CERT/CC VU#472136](https://kb.cert.org/vuls/id/472136) | current product-specific earbud DoS example | Redmi Buds 3 Pro through 6 Pro advisory; not matched to this lab fixture |
