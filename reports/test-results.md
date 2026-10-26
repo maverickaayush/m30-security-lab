@@ -12,7 +12,7 @@ are in ignored `evidence/` for local review.
 | `.../gradle --no-daemon testDebugUnitTest` | `BUILD SUCCESSFUL`; parser truncation and JSON/CSV quoting tests passed |
 | `./scripts/build.sh` | `BUILD SUCCESSFUL` |
 | `./scripts/install.sh <pinned serial>` | `Success`; package `org.cattail.m30lab` installed without replacing an unrelated package |
-| latest APK SHA-256 | `dad854a9290f21cebd204bca8fe9c8f9dcf6f8c48c74a80840dea6e1f9fbae0d` |
+| latest APK SHA-256 | `19bd828132a48c39695b2be1a948438b00ea87bd70f7374ba84dde7873028d06` |
 
 The app was launched from ADB. It does not contain a boot receiver and did not
 start RF transmission on install or launch.
@@ -50,6 +50,19 @@ has no cooperating receiver.
 After this tag change, a fresh 35-second host receiver run observed counter 0
 with tag `LAB` at approximately -62 dBm. The phone callback accepted the
 advertisement, and leaving the activity triggered the app's cleanup path.
+
+A later 35-second Linux BlueZ popup receiver run matched one LAB marker from
+the M30 and called `notify-send` for the explicit message “Owned lab receiver
+test”; the command exited 0. The Linux desktop notification service was
+present. This demonstrates an opted-in host popup, not a popup on an unrelated
+nearby device.
+
+A repeat run with the phone UI field set to `PING` matched that marker and
+called `notify-send` with the text `PING`; it exited 0. The receiver stopped at
+35 seconds and reported one distinct marker and one popup. The receiver's
+default is capped at three desktop notifications per run, with a command-line
+maximum of ten, to keep bounded sequence tests from becoming an unbounded local
+notification loop.
 
 ## GATT fixture
 

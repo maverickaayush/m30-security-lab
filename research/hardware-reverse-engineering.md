@@ -44,6 +44,14 @@ and no `hci0` or other Linux Bluetooth controller was present. The absence of
 AF_BLUETOOTH is therefore explained by the running kernel configuration and
 does not imply that the internal radio is missing.
 
+By comparison, the laptop's Realtek `0bda:b86a` adapter is bound to `btusb` and
+appears as `hci0` in `hciconfig`. Its HCI version reports Bluetooth 5.3 and
+BlueZ reports central/peripheral roles and no active advertising instances at
+inspection. This is a working Linux Bluetooth interface for receiver and
+fixture tests. It is a laptop controller, not a path into the phone's SCSC
+controller. The `host/lab_popup_receiver.py` test used it to receive the M30
+LAB marker and trigger one desktop notification.
+
 ## Matching source comparison
 
 The public M30-family kernel tree

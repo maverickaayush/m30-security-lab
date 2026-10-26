@@ -14,6 +14,16 @@ The handset's `CONFIG_BT` is unset and `CONFIG_SCSC_BT_BLUEZ` is off. Its observ
 
 Ownership of all nearby devices permits controlled testing but does not change the controller's command semantics. The earbud/host models and firmware were not supplied, so no vulnerability-specific claim can be made. Even with an external raw link-layer radio or sniffer, disrupting an unrelated connection requires a demonstrated target-specific mechanism and verification. A generic “works on every Bluetooth connection” result is unsupported.
 
+## Linux controller check
+
+The laptop's USB Realtek controller is a separate BlueZ `hci0` (HCI 5.3,
+`btusb`, central/peripheral roles). `hciconfig hci0 version` succeeded and
+`hcitool con` reported no connections at the time of the check. The adapter is
+useful for receiving the project's synthetic advertisements and for a bounded
+owned GATT fixture. It does not expose the M30's internal SCSC connection
+handles, and a host-side disconnect operation would only apply to a connection
+owned by that adapter. No command was sent to disconnect a third-party link.
+
 ## Nearby popup or custom message request
 
 The phone can broadcast a synthetic LAB marker and can exchange a message with

@@ -46,6 +46,22 @@ message only when an explicitly installed, opt-in receiver understands this
 project UUID. The app does not impersonate pairing prompts or send arbitrary
 messages to uninstalled devices.
 
+The laptop can act as one opted-in popup receiver:
+
+```bash
+cd ~/m30-security-lab
+python3 host/lab_popup_receiver.py --seconds 35
+```
+
+Run it while the phone sends a bounded LAB advertisement. The phone UI's
+four-character LAB popup text appears on this opted-in desktop. Use
+`--message 'Longer local text'` to override that text at the receiver. The
+receiver shows at most three notifications per run by default (maximum ten),
+does not connect or pair, and stops after at most 120 seconds. Other Linux
+desktops can run the same receiver. An Android or iOS device needs its own
+cooperating receiver app to display a custom message. Legacy advertisements
+on this phone cannot carry an arbitrary-length message alongside the LAB UUID.
+
 See [device capabilities](reports/device-capabilities.md), [test results](reports/test-results.md), [capture workflow](research/capture.md), [transport reverse engineering](research/hardware-reverse-engineering.md), [Noise package inspection](research/noise-firmware.md), and [disconnect feasibility](reports/deauth-feasibility.md).
 
 ## Cleanup

@@ -88,7 +88,7 @@ class MainActivity : Activity() {
         text("UUID $labUuid • marker LAB • one legacy set • no automatic transmission")
         durationInput = input("Duration seconds (5–120)", "30")
         intervalInput = input("Payload change interval ms (1000–10000)", "1000")
-        messageInput = input("Optional LAB marker (max 4 ASCII bytes; not a popup)", "LAB")
+        messageInput = input("LAB popup text (4 ASCII; opt-in receiver only)", "LAB")
         modeSpinner = spinner(arrayOf("Low power", "Balanced", "Low latency"))
         powerSpinner = spinner(arrayOf("Ultra low", "Low", "Medium", "High"))
         button("Start single LAB advertisement") { startAdv(false) }
