@@ -38,7 +38,18 @@ The app uses `targetSdk=29` for Android 10 compatibility and `compileSdk=35` wit
 
 ## Safe operation
 
-Open the app, grant its requested permission, refresh capabilities, and select a lab test. Scanning stops at 30 seconds and stores at most 500 records. The advertising controls default to one legacy set, low-power mode, ultra-low transmit power, 30 seconds, and a one-second payload-change interval. Durations clamp to 5–120 seconds, intervals to 1–10 seconds. The emergency stop ends scanning, advertising and the app-owned GATT link. Leaving the app also stops scanning and advertising.
+Open the app, grant its requested permission, refresh capabilities, and select a lab test. Scanning stops at 30 seconds and stores at most 500 records. The advertising controls default to one legacy set, low-power mode, ultra-low transmit power, 30 seconds, and a one-second payload-change interval. Durations clamp to 5–120 seconds, intervals to 1–10 seconds. The emergency stop ends scanning, advertising, the phone connection test and the app-owned GATT link. Leaving the app also stops these tests.
+
+**Bluetooth connection tests** now contains a phone-side Android RFCOMM backend.
+Select one owned Classic device, request its SDP UUIDs, choose a returned
+service UUID, and set a bounded request count and duration. The screen also
+shows why Linux L2CAP echo cannot run on the installed kernel. It does not
+call the laptop backend or claim that opening Samsung's H4 node creates a
+Linux `hci0`. No Classic target test was run in the current continuation.
+See [mobile integration](reports/mobile-integration.md),
+[REA handoff trace](research/rea-handoff-followup.md),
+[offline bridge compile](research/kernel-bridge-build.md), and
+[handoff state model](research/handoff-design.md).
 
 The LAB advertisement uses service UUID `7f5f42d6-4659-4c15-9fe7-7de7a7033b01` and manufacturer test marker `LAB` with a profile byte, one-byte sequence counter and optional four-byte ASCII tag under company ID `0xffff` (reserved test use). Single mode uses the baseline profile; multi mode rotates the named LAB-A/B/C profiles. It is synthetic and non-connectable. API callback success shows stack acceptance, not a measured packet rate. Use a separate receiver for RF observations.
 

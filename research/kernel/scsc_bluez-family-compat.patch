@@ -1,0 +1,18 @@
+diff --git a/drivers/misc/samsung/scsc_bt/scsc_bluez.c b/drivers/misc/samsung/scsc_bt/scsc_bluez.c
+--- a/drivers/misc/samsung/scsc_bt/scsc_bluez.c
++++ b/drivers/misc/samsung/scsc_bt/scsc_bluez.c
+@@ -26,9 +26,14 @@
+ #include <linux/skbuff.h>
+ #include <linux/rfkill.h>
+ #include <linux/platform_device.h>
++#include <linux/version.h>
+ 
+ #include <net/bluetooth/bluetooth.h>
+ #include <net/bluetooth/hci_core.h>
++/* This 4.4 family tree has bt_cb fields but lacks newer hci_skb_* helpers.
++ * Keep the adaptation local to the optional SCSC bridge. */
++#define hci_skb_pkt_type(skb) (bt_cb(skb)->pkt_type)
++#define hci_skb_expect(skb) (bt_cb(skb)->expect)
+ #include "../../../bluetooth/h4_recv.h"
+ 
+ #include <scsc/scsc_logring.h>

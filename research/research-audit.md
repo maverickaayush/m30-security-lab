@@ -80,3 +80,15 @@ source revisions and redacted results only.
 | The phone can run Linux BlueZ now | Live `/proc/config.gz` and interface inventory | Unsupported on current image; high confidence | A future matched kernel build could change this |
 | The laptop backend can run a bounded protocol experiment | `host/blue_stress.py`, 7 unit tests, real adapter dry-run | Implemented and dry-run verified; target effect untested | Named target, service inventory, independent connection observation |
 | New UI has single and multi-profile LAB controls | APK build/install, live UI hierarchy, callback log | Observed on handset; callback only | Independent receiver during this exact revision |
+
+# 2026-10-26 native-phone continuation ledger
+
+| Claim | Supporting artifact | Level | Missing verification |
+|---|---|---|---|
+| Current HAL owns SCSC H4 fd | Read-only `/proc` fd 6 and service/SELinux query; `research/rea-handoff-followup.md` | Observed live | Verify transition behavior only after a safe supervisor exists |
+| Vendor operation 3 opens `/dev/scsc_h4_0`; operation 4 closes it | REA/Ghidra of hashed installed-build vendor library at `0x101090` | Static binary evidence | Runtime tracing of callback/error timing |
+| Family driver intends one H4 user | `scsc_bt_module.c:1072–1128` at `0952065`; returns `-EBUSY` when `h4_users` is set | Source-supported for family revision | Match exact installed source and test serialized handoff |
+| Patched family SCSC bridge compiles | `research/kernel-bridge-build.md`; AArch64 bridge and composite object hashes | Compiled offline | Exact-build kernel, boot, HCI registration, restoration |
+| New APK can run selected UUID-based RFCOMM operations | `PhoneProtocolBackend.kt`, Android build and install | Implemented and compiled; target operation untested | Unlock UI, choose named owned Classic fixture with SDP UUID, observe baseline |
+| New APK runs Linux L2CAP echo on M30 | Live config has `CONFIG_BT=n`; no `/sys/class/bluetooth` | Unsupported on installed kernel | Matched kernel access path and safe handoff |
+| Android-to-Linux handoff succeeds | Four mocked state-machine tests only | Mocked; no live handoff | Source-matched kernel, supervisor, restore drill |

@@ -61,3 +61,20 @@ listed in `research/sources.md` and `research/prior-art.md`.
 
 The REA command outputs and hashes are retained in ignored `evidence/` files;
 the vendor ELFs and firmware image remain private.
+
+## 2026-10-26 native-phone continuation
+
+| Command/tool | Exit/result |
+|---|---|
+| Serial-pinned `getprop ro.build.display.id`, `/proc/config.gz`, HCI sysfs | Exit 0; M305FDDS8CVB2, `CONFIG_BT` and `CONFIG_SCSC_BT_BLUEZ` unset, no `/sys/class/bluetooth` |
+| Serial-pinned `ps -AZ`, `/proc/3699/fd` targeted read | Exit 0; HAL in `hal_bluetooth_default` domain had fd 6 to `/dev/scsc_h4_0` |
+| REA/Ghidra function analyses (HAL `close`, `Shutdown`, `Close`, `Send`, `H4Protocol::Send`; vendor `op`, `cleanup`) | Exit 0; offsets and hashes in `research/rea-handoff-followup.md` |
+| `git clone --depth 1 --single-branch --filter=blob:none` family tree | Exit 0; revision `095206579f69121278ed1dd5fd0d7975c0705c6a` in volatile `/tmp` |
+| `make ARCH=arm64 m30lte_00_defconfig`; fragment merge; `olddefconfig` | Exit 0; requested Bluetooth and SCSC symbols survived Kconfig normalization |
+| First bridge compile with host GCC 15 | Exit 2; old host `dtc` duplicate `yylloc`; temporary `HOSTCFLAGS=-fcommon` advanced |
+| Bridge compile before compatibility patch | Exit 2; unavailable `hci_skb_pkt_type`, `hci_skb_expect`, `KERNEL_VERSION` in family headers |
+| Bridge compile after both staged patches | Exit 0; AArch64 `scsc_bluez.o` and linked composite `scsc_bt.o`; hashes in `research/kernel-bridge-build.md` |
+| `python3 -m unittest discover -s tests -p 'test_*.py' -v` | Exit 0; 11 tests, including four handoff mocks |
+| Android `testDebugUnitTest` | Exit 0; bounded phone scheduler tests pass |
+| `scripts/build.sh`, `scripts/install.sh SERIAL`, `am start` | Exit 0; final APK SHA-256 `6b07fec128512b5a8f94d8d17fb23d8671f93e1a12afb4e588b8ab3ac28956c5`; installed and activity launched |
+| `uiautomator dump` | Exit 0; lock-screen nodes only, so tap/export verification remains pending user unlock |

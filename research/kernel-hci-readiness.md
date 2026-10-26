@@ -29,10 +29,11 @@ USB `btusb`, since the proposed path uses the internal SCSC controller.
    obtained. The family source uses `CONFIG_SCSC_DEBUG=y` in its M30 defconfig,
    while the running kernel has it disabled, proving at least one configuration
    difference. Build compatibility is therefore unverified.
-3. The local host has no ARM64 cross compiler and only about 703 MiB of
-   persistent filesystem space free. `/tmp` is a volatile tmpfs with about
-   7.1 GiB free, which could stage an experimental compile, but no exact
-   source package is available to build and validate an installable image.
+3. At the initial audit the host had no ARM64 cross compiler. On 2026-10-26,
+   GCC 14 and binutils were extracted into volatile `/tmp`; the public
+   **family** bridge compiled offline after two source patches. See
+   `research/kernel-bridge-build.md`. No exact installed-build source package
+   or validated installable image is available.
 4. The active Android Bluetooth HAL owns `/dev/scsc_h4_0`. The SCSC BlueZ bridge
    calls the same driver's open/read/write operations, so a future runtime
    must assign the controller to one stack at a time and provide compatible
@@ -43,7 +44,9 @@ USB `btusb`, since the proposed path uses the internal SCSC controller.
    review and correction before it is suitable for a research build. A minimal
    source patch is staged at `research/kernel/scsc_bluez-send-lifetime.patch`;
    it moves the free after the last read of `skb`. `git apply --check` passed
-   against the family source at revision `0952065`; the patch remains unbuilt.
+   against the family source at revision `0952065`. This patch and a 4.4-header
+   compatibility patch later compiled in the family tree, but have not run on
+   the installed handset.
    This is a source observation, not a proven defect in the installed kernel,
    because the bridge is disabled on the phone.
 

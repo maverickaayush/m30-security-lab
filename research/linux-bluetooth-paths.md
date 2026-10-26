@@ -52,8 +52,10 @@ chroot alone does not solve any of that.
    boot image format, module ABI and firmware/board pairing.
 2. Rebuild the unmodified current kernel and compare `uname -a`, config,
    modules, boot/dtb integration and behavior. A same-version string alone is
-   insufficient. Local persistent free space was ~701 MiB; no matching ARM64
-   cross compiler or exact source was staged.
+   insufficient. At the initial audit no cross compiler or exact source was
+   staged. A later volatile ARM64 toolchain compiled the public family bridge
+   offline; exact installed-build source remains unavailable (see
+   `research/kernel-bridge-build.md`).
 3. Only then enable `CONFIG_BT=y` and `CONFIG_SCSC_BT_BLUEZ=y` as in
    `research/kernel/m30lte-hci.fragment`. The family
    [`Kconfig`](https://github.com/akhil1999/android_kernel_samsung_m30lte/blob/095206579f69121278ed1dd5fd0d7975c0705c6a/drivers/misc/samsung/scsc_bt/Kconfig),
@@ -61,7 +63,8 @@ chroot alone does not solve any of that.
    and [`scsc_bluez.c`](https://github.com/akhil1999/android_kernel_samsung_m30lte/blob/095206579f69121278ed1dd5fd0d7975c0705c6a/drivers/misc/samsung/scsc_bt/scsc_bluez.c)
    show its dependency on Linux HCI core and `h4_recv.h`. The send callback
    dereferences `skb` after `kfree_skb`; the staged source patch addresses this
-   in the family tree, but has only passed `git apply --check`.
+   in the family tree. It and a required 4.4-header compatibility patch now
+   compile into the family `scsc_bt.o`; neither is installed or runtime tested.
 4. Define a one-owner runtime handoff and test service startup, rfkill,
    SELinux policy and return to Android. Building a bridge does not prove it
    works with this firmware or that it can transmit arbitrary LL frames.

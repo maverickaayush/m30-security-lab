@@ -53,9 +53,7 @@ class MainActivity : Activity() {
     private lateinit var modeSpinner: Spinner
     private lateinit var powerSpinner: Spinner
     private lateinit var profileSpinner: Spinner
-    private lateinit var stressStatus: TextView
-    private lateinit var stressTarget: EditText
-    private lateinit var stressController: EditText
+    private lateinit var mobileLab: MobileConnectionLab
     private lateinit var gattUi: GattLab
     private var uiHost: LinearLayout? = null
     private var selectedAddress: String? = null
@@ -112,14 +110,11 @@ class MainActivity : Activity() {
             text("The selected fixture appears here. GATT writes always show a payload preview and confirmation.")
             gattUi = GattLab(this, uiHost ?: root, ::log)
         }
-        section("Bluetooth stress test") {
-            text("This phone has no Linux hci0. The laptop backend is a separate, explicitly invoked lab process; no phone-side disconnect is implied.")
-            stressTarget = input("Selected target address (read-only display)", "")
-            stressTarget.isEnabled = false
-            stressController = input("Laptop controller (for the CLI, usually hci0)", "hci0")
-            button("Start phone stress test") { startStress() }
-            button("Stop phone stress test") { stopStress() }
-            stressStatus = text("Unsupported: no internal Linux HCI controller")
+        section("Bluetooth connection tests") {
+            mobileLab = MobileConnectionLab(this, uiHost ?: root, adapter, ::ready, ::log) {
+                if (mobileLab.hasResult()) saveDocument("application/json", "phone-connection-test.json", 3)
+                else log("No phone connection-test result to save")
+            }
         }
         section("Results and advanced details") {
             text("Callbacks, status codes, raw bytes and cleanup events are retained here for research records.")
@@ -219,7 +214,7 @@ class MainActivity : Activity() {
                     text = "Select ${name.ifBlank { "(unnamed)" }} [$address] • $transport • RSSI ${result.rssi}"
                     setOnClickListener {
                         selectedAddress = address
-                        stressTarget.setText(address)
+                        mobileLab.select(result.device, name)
                         gattUi.select(result.device, name)
                         inspection.text = item.toString(2)
                         log("Selected owned peripheral $address ($transport); Classic service support remains unverified")
@@ -303,20 +298,13 @@ class MainActivity : Activity() {
         advCallback = null
         log("Advertising stopped: $reason")
     }
-    private fun stopEverything() { stopScan("emergency stop"); stopAdv("emergency stop"); gattUi.disconnect(); log("All lab activity stopped") }
-
-    private fun startStress() {
-        stressStatus.text = "Unsupported: this Android image exposes no Linux hci0. Use host/blue_stress.py only with a named owned Classic target."
-        log("Phone stress test not started: no internal Linux HCI backend; laptop execution is separate")
-    }
-
-    private fun stopStress() {
-        stressStatus.text = "Ready: no phone-side stress session exists"
-        log("Phone stress stop requested; no phone-side process was running")
-    }
+    private fun stopEverything() { stopScan("emergency stop"); stopAdv("emergency stop"); mobileLab.onStop(); gattUi.disconnect(); log("All lab activity stopped") }
 
     private fun export(type: String, filename: String, request: Int) {
         if (records.isEmpty()) { log("No scan records to export"); return }
+        saveDocument(type, filename, request)
+    }
+    private fun saveDocument(type: String, filename: String, request: Int) {
         startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply { addCategory(Intent.CATEGORY_OPENABLE); this.type = type; putExtra(Intent.EXTRA_TITLE, filename) }, request)
     }
     @Deprecated("Uses Android 10 activity result API for compatibility")
@@ -324,11 +312,11 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (resultCode != RESULT_OK || data?.data == null) return
         try {
-            val content = if (requestCode == 1) ScanCodec.json(records) else ScanCodec.csv(records)
+            val content = when (requestCode) { 1 -> ScanCodec.json(records); 2 -> ScanCodec.csv(records); 3 -> mobileLab.resultJson(); else -> return }
             contentResolver.openOutputStream(data.data!!)?.use { it.write(content.toByteArray(Charsets.UTF_8)) }
-            log("Exported ${records.size} records")
+            log("Exported ${if (requestCode == 3) "phone test result" else "${records.size} scan records"}")
         } catch (e: Exception) { log("Export error ${e.message}") }
     }
-    override fun onStop() { stopScan("activity stopped"); stopAdv("activity stopped"); super.onStop() }
-    override fun onDestroy() { stopEverything(); super.onDestroy() }
+    override fun onStop() { stopScan("activity stopped"); stopAdv("activity stopped"); mobileLab.onStop(); super.onStop() }
+    override fun onDestroy() { stopEverything(); mobileLab.destroy(); super.onDestroy() }
 }
