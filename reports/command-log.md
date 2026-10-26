@@ -94,3 +94,19 @@ the vendor ELFs and firmware image remain private.
 | Android `testDebugUnitTest` | Exit 0; existing bounded scheduler/parser tests passed |
 | Read-only boot layout and partition sizes/hashes | Exit 0; `research/recovery-readiness-2026-10-26.md`; no partition copied or written |
 | New RFCOMM fixture run `rfcomm-reliability-20261026-a` | Fixture registered and emitted `fixture_ready`; handset remained locked, so no phone run occurred; SIGINT cleanup emitted `stopped_and_restored` and `bluetoothctl` confirmed Powered yes, Discoverable no, Pairable no |
+
+## 2026-10-27 installation-readiness continuation
+
+| Command or check | Result / exit code |
+|---|---|
+| Serial-pinned handset inventory | Exit 0; SM-M305F / `m30lte` / `m30ltedd`, Android 10, `M305FDDS8CVB2`, kernel `4.4.177-22392479`, Magisk 30.7, SELinux enforcing |
+| Battery and storage check | Exit 0; battery 100% AC; `/data` had about 43 GiB free; host root filesystem was full |
+| Read-only partition map | Exit 0; BOOT 33,554,432; DTB/DTBO 8,388,608 each; RECOVERY 39,845,888 bytes |
+| Bounded rollback copies | Exit 0; BOOT, DTB, DTBO and RECOVERY copied to phone user-data storage and pulled to volatile host tmpfs |
+| Source/copy/hash comparison | Exit 0; all four live-source, phone-copy and host-copy SHA-256 values matched |
+| `file`/header inspection | Exit 0; BOOT and RECOVERY are AOSP-style arm64 Android images with 2048-byte pages; BOOT has gzip ramdisk, Samsung DTBH and `SEANDROIDENFORCE` |
+| AIK unchanged `--original --origsize` round-trip | Exit 0; output hash exactly matched the live BOOT hash |
+| Candidate package construction and parse | Exit 0; 32 MiB padded package, candidate kernel/DTB/ramdisk hashes verified after unpack |
+| Live versus candidate config comparison | Exit 0; live `CONFIG_DM_VERITY=y`, candidate `CONFIG_DM_VERITY` unset; USB/debug/static-ring differences recorded |
+| Recovery contents | Static TWRP ramdisk observed; recovery boot and Download Mode USB recognition not attempted |
+| Host cache cleanup | Removed only disposable pip cache after root filesystem reached 100%; project evidence, firmware, toolchains and backup copies were retained |

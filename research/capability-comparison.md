@@ -62,3 +62,13 @@ firmware lookup is HTTPS metadata; it is not a broadcast-popup protocol.
 | Bluebinder/VHCI route | No | Official source requires `/dev/vhci`, Binder/HIDL/AIDL and Linux HCI | No M30 build attempted | No | Enable VHCI/BT, port Binder policy and service lifecycle | Kernel and Android policy unavailable |
 | Raw HCI commands on M30 | No | No internal `hci0`; HAL H4 only | Candidate would support path | No | Boot-tested exclusive owner | Controller handoff unvalidated |
 | Third-party link disruption | No mechanism established | HCI disconnect uses a local controller handle; no target advisory matched | N/A | No | Named affected target/version and independent control | Generic capability unsupported |
+
+## Installation-readiness continuation
+
+| Capability | Works now | Evidence | Built offline | Tested on device | Required change | Remaining blocker |
+|---|---|---|---|---|---|---|
+| Rollback partition copies | Hash-equal copies created | Live-source, phone-copy and host-copy hashes match for BOOT/DTB/DTBO/RECOVERY | N/A | Read-only source and copy checks | Durable independent storage and restore procedure | Host copy is volatile; recovery/download path untested |
+| Stock boot package parsing | Yes, static | AIK recognized AOSP image; unchanged round-trip was byte-identical | N/A | Read-only partition copy | Device-specific signing/acceptance validation | No Samsung package or boot test |
+| Bluetooth candidate boot package | Structurally valid only | Candidate unpacked with matching kernel/DTB/ramdisk hashes and fits BOOT size | Yes | No | Exact source/config/ABI and verity match | Candidate disables live DM-verity and changes DTB |
+| Android storage/decryption after candidate | Not tested | Live config has DM-verity; candidate differs | Candidate includes family storage config only | No | Preserve matched storage/verity config | No exact source or boot validation |
+| Recovery return | Unknown | TWRP ramdisk statically present in RECOVERY | N/A | No recovery boot | Verify physical recovery and Android return | User interaction and restore package required |

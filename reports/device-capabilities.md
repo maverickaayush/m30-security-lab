@@ -23,7 +23,13 @@ One ADB device was initially `unauthorized`; after the user accepted USB debuggi
 | Kernel config | `CONFIG_SCSC_BT=y`, `# CONFIG_SCSC_BT_BLUEZ is not set`, `# CONFIG_BT is not set` (read from `/proc/config.gz` as root) |
 | Firmware property | `vendor.bluetooth_fw_ver=UTC|lassen_s612|S612_E788X_C1_Y21W42A` |
 
-The user reports TWRP is installed, but recovery was **not booted or verified** during this task. No partition backup was taken. The fingerprint, bootloader version, kernel build and firmware property above are rollback planning inputs, not a tested restore path.
+The user reports TWRP is installed, but recovery was **not booted or verified** during this task. No partition backup was taken in the original discovery phase. The fingerprint, bootloader version, kernel build and firmware property above are rollback planning inputs, not a tested restore path.
+
+Continuation (2026-10-27): bounded read-only copies of BOOT, DTB, DTBO and
+RECOVERY were made and the live-source, phone-copy and host-copy hashes
+matched. The host copy is volatile and no durable second-storage copy exists;
+the recovery image was not booted. See the [installation manifest](../research/installation-manifest-2026-10-27.md)
+and [readiness gates](../research/readiness-gates-2026-10-27.md).
 
 ## Host and interfaces
 

@@ -66,8 +66,13 @@ service. No boot receiver or automatic RF transmission was found.
 
 Raw evidence remains ignored under `evidence/`; copied vendor ELFs, the firmware
 copy, Noise APKs, screenshots and capture contents must stay local. No partition
-backup was created. The public worktree contains documentation, code, hashes,
-source revisions and redacted results only.
+backup was created in the original audit phase. The public worktree contains
+documentation, code, hashes, source revisions and redacted results only.
+
+Continuation (2026-10-27): bounded read-only copies of BOOT, DTB, DTBO and
+RECOVERY were made and the live-source, phone-copy and volatile-host hashes
+matched. No durable second copy or recovery boot test exists; see the
+installation manifest and readiness-gate report.
 
 ## Follow-on implementation audit (2026-10-26)
 
@@ -91,6 +96,15 @@ source revisions and redacted results only.
 | Bluebinder can provide a VHCI proxy in its supported environment | Bluebinder revision `ebab7c3...`, source and service unit | Source-supported | M30 kernel VHCI/Binder policy and Android 10 runtime compatibility |
 | HAL close stops the async watcher and closes vendor resources | REA evidence `evidence/rea-hal-close-final.json`, HAL hash | Static binary evidence | Runtime callback timing and service restart |
 | Current partition layout is known | Read-only by-name listing, sizes and hashes | Observed live | Verified recovery boot and stock restore artifact |
+
+## Installation-readiness continuation ledger
+
+| Claim | Supporting artifact | Level | Missing verification |
+|---|---|---|---|
+| Minimum rollback copies are hash-equal | `research/installation-manifest-2026-10-27.md`, private phone/host copies | Observed live | Durable independent storage and restoration acceptance |
+| Live BOOT package is parseable and reproducible | `research/boot-package-validation-2026-10-27.md`, AIK output | Observed and offline reproduced | Samsung signing/bootloader acceptance |
+| Bluetooth candidate package fits the BOOT partition | Candidate package hash and parsed size in boot-package report | Offline structural result | Exact source/DTB/verity compatibility and boot |
+| Candidate is safe to install | No supporting evidence | Unsupported claim rejected | Exact Samsung source, config match, recovery path and boot validation |
 
 # 2026-10-26 native-phone continuation ledger
 

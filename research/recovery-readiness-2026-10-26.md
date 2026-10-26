@@ -33,7 +33,9 @@ the project. Do not publish raw partitions or EFS/pairing material.
    downgrade it.
 3. Make bounded, readable copies of only the device-specific partitions needed
    for restore (BOOT, DTB/DTBO, RECOVERY and relevant metadata), hash them, and
-   test that the copies can be read back. This has not been done.
+   test that the copies can be read back. This was completed on 2026-10-27 for
+   BOOT, DTB, DTBO and RECOVERY; live-source, phone-copy and host-copy hashes
+   match. The host copy is volatile and no durable second-storage copy exists.
 4. Reproduce the family baseline from source, compare kernel release,
    configuration, DTBs, vendor modules, boot packaging and firmware paths, and
    resolve every mismatch that could prevent boot.
@@ -52,3 +54,19 @@ verify descriptor release, register one Linux HCI owner, run one cooperating
 fixture exchange, stop it, restore Android and repeat the same Bluetooth check.
 Any ownership or service timeout is a stop condition and requires recovery;
 there is no safe basis for a live handoff on the current phone image.
+
+## Continuation: package and backup validation
+
+The live BOOT image was parsed with the family tree's Android Image Kitchen
+tools and an unchanged `--original --origsize` round-trip reproduced the
+exact live BOOT hash. A candidate package using the Bluetooth `Image` and
+family `dtb.img` was also parsed successfully and fits the BOOT partition, but
+its DTB and configuration differ from the handset. Details and hashes are in
+[`research/boot-package-validation-2026-10-27.md`](boot-package-validation-2026-10-27.md)
+and [`research/installation-manifest-2026-10-27.md`](installation-manifest-2026-10-27.md).
+
+The TWRP ramdisk is now confirmed as static content in RECOVERY, but no
+recovery boot or Download Mode USB session was performed. The installation
+decision remains blocked by the exact source/ABI, dm-verity/configuration,
+durable backup, and restore-procedure gates documented in
+[`research/readiness-gates-2026-10-27.md`](readiness-gates-2026-10-27.md).

@@ -43,3 +43,28 @@ object. Required live gates: exact installed-build source, reproducible stock
 kernel, signed/bootable image workflow, validated backup/restore, SELinux/service
 policy, driver exclusivity checks, then a reversible no-traffic handoff and
 Android restoration drill. No partition changes are authorized in this phase.
+
+## Source review of the optional BlueZ path
+
+At family revision `095206579f69121278ed1dd5fd0d7975c0705c6a`,
+`scsc_bluez.c` registers a separate Linux `hci_dev` only when its
+`power_control` module parameter or rfkill callback schedules the open worker.
+The worker sets `hdev->bus = HCI_VIRTUAL`, assigns the HCI open/close/send
+callbacks, and calls `hci_register_dev`. Its open callback calls the same
+`bt_fs->open` operation used by the SCSC H4 path; its close callback cancels
+the reader work and calls `bt_fs->release`. The module does not stop the
+Android Bluetooth service or coordinate Binder/HIDL ownership.
+
+The sibling SCSC file operations guard the transport with `bt_service.h4_users`:
+the first open starts the Bluetooth service, a second open returns `-EBUSY`,
+and release stops the service before clearing the flag. This is a driver-level
+exclusive-open guard, not a complete Android-to-BlueZ handoff. It means the
+optional bridge cannot safely coexist with the Android HAL's live descriptor;
+Android must be quiesced and its close path must complete before BlueZ opens
+the bridge. Conversely, BlueZ must unregister/close before Android is started.
+
+The source exposes a switching knob, but it is not proof of runtime switching:
+there is no Android service stop/start contract, process-death watchdog, or
+verification that all readers and vendor resources have drained. These source
+findings are why the current candidate remains unboot-tested and why a live
+handoff was not attempted.
