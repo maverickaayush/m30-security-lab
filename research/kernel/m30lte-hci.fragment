@@ -1,0 +1,8 @@
+# Research fragment for a SOURCE-MATCHED M305FDDS8CVB2 kernel tree.
+# This file is not a bootable image and has not been applied to the phone.
+# Build the Linux Bluetooth core and the SCSC HCI bridge into the kernel.
+CONFIG_BT=y
+CONFIG_BT_BREDR=y
+CONFIG_BT_LE=y
+CONFIG_SCSC_BT=y
+CONFIG_SCSC_BT_BLUEZ=y

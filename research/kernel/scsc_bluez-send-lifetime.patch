@@ -1,0 +1,26 @@
+diff --git a/drivers/misc/samsung/scsc_bt/scsc_bluez.c b/drivers/misc/samsung/scsc_bt/scsc_bluez.c
+--- a/drivers/misc/samsung/scsc_bt/scsc_bluez.c
++++ b/drivers/misc/samsung/scsc_bt/scsc_bluez.c
+@@ -139,9 +139,7 @@ static int slsi_bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
+ 	ret = bt_fs->write(NULL, skb->data, skb->len, NULL);
+ 	if (ret >= 0) {
+-		kfree_skb(skb);
+-
+ 		/* Update HCI stat counters */
+ 		hdev->stat.byte_tx += skb->len;
+ 
+ 		switch (hci_skb_pkt_type(skb)) {
+ 			case HCI_COMMAND_PKT:
+@@ -153,10 +151,12 @@ static int slsi_bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
+ 				break;
+ 
+ 			case HCI_SCODATA_PKT:
+ 				hdev->stat.sco_tx++;
+ 				break;
+ 		}
++
++		kfree_skb(skb);
+ 	}
+ 
+ 	return ret;
+ }

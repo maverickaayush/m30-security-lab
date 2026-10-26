@@ -64,6 +64,10 @@ on this phone cannot carry an arbitrary-length message alongside the LAB UUID.
 
 See [device capabilities](reports/device-capabilities.md), [test results](reports/test-results.md), [capture workflow](research/capture.md), [transport reverse engineering](research/hardware-reverse-engineering.md), [Noise package inspection](research/noise-firmware.md), and [disconnect feasibility](reports/deauth-feasibility.md).
 
+The proposed internal HCI kernel config and source readiness checks are in
+[kernel HCI readiness](research/kernel-hci-readiness.md). They are offline
+research artifacts; no kernel image has been installed on the phone.
+
 ## Cleanup
 
 ```bash

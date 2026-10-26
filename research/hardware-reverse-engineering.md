@@ -62,13 +62,12 @@ the vendor HAL, so it was not attempted.
 ## Workaround audit
 
 The read-only kernel configuration shows `CONFIG_USB=y` and an XHCI platform
-host controller, but `CONFIG_USB_OTG` is unset, `CONFIG_BT` is unset, and no
-USB Bluetooth transport driver such as `btusb` is built. The running Android
-USB manager also reported no attached host devices. An external adapter would
-therefore require all of the following: a compatible OTG/power setup, a kernel
-with USB host mode and a Bluetooth transport driver, and a controller owner
-that does not conflict with Android's HAL. This build supplies none of those
-Bluetooth pieces.
+host controller; `CONFIG_USB_OTG` and `CONFIG_BT` are unset, and no USB
+Bluetooth transport driver such as `btusb` is built. The Android USB manager
+reported a dual-role port but no attached host devices. `CONFIG_USB_OTG` being
+unset does not by itself rule out USB host operation on this build. An external
+adapter would need a powered/compatible host setup and a Bluetooth transport
+driver, neither of which has been verified on the handset.
 
 The HAL process currently owns the internal transport: its file descriptor 6
 points to `/dev/scsc_h4_0`, and the node is labeled `sec_radio_device` under
@@ -95,9 +94,11 @@ so this repository is a family comparison, not proof of an exact source match.
 
 The source comparison explains why a future custom kernel could expose a
 BlueZ/HCI path, but that would be a new kernel and controller ownership model.
-This task deliberately did not install or build one. Directly opening the H4
-character device while Android owns the HAL would race the system transport and
-is not a safe capability addition.
+A reviewable config fragment and build-readiness audit are in
+`research/kernel-hci-readiness.md`. The exact matching source, compiler, disk
+space, and controller handoff are not yet available for a validated build.
+Directly opening the H4 character device while Android owns the HAL would race
+the system transport and is not a safe capability addition.
 
 ## REA decision
 
