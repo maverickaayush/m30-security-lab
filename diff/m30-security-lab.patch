@@ -1129,10 +1129,10 @@ index 0000000..6ca8565
 +    main()
 diff --git a/reports/command-log.md b/reports/command-log.md
 new file mode 100644
-index 0000000..9ad50f1
+index 0000000..d6e1ab7
 --- /dev/null
 +++ b/reports/command-log.md
-@@ -0,0 +1,29 @@
+@@ -0,0 +1,30 @@
 +# Command and tool log
 +
 +Recorded 2026-10-26 (Asia/Kolkata). The ADB serial is intentionally omitted
@@ -1158,6 +1158,7 @@ index 0000000..9ad50f1
 +| Noise package paths, `dumpsys package`, APK pull, `aapt dump`, `dexdump` | Exit 0; static result in `research/noise-firmware.md` |
 +| `python3 host/lab_popup_receiver.py --seconds 35` with phone LAB text `PING` | Exit 0; matched one marker, called `notify-send`, popup exit 0, stopped at 35 seconds |
 +| `hciconfig hci0 version`; `bluetoothctl show` | Exit 0; external Realtek USB controller, HCI 5.3, BlueZ powered with zero active advertising instances |
++| Android SDK `dexdump` on Noise `classes2.dex` | Exit 0; extracted candidate BES TOTA UUIDs and OTA method/string call paths; no popup/deauth path found |
 +| Rebuilt `./scripts/build.sh` and `./scripts/install.sh <serial>` | Exit 0; APK SHA-256 `19bd828132a48c39695b2be1a948438b00ea87bd70f7374ba84dde7873028d06` |
 +
 +The host fixture and receiver use bounded timeouts. ADB helper commands use
