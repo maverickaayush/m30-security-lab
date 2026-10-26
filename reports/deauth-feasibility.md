@@ -42,10 +42,12 @@ product firmware vulnerability, but they are not generic Bluetooth features:
   unknown lab fixture. This is an unauthorized pairing and audio-hijack case,
   not a universal disconnect command.
 
-The lab has no exact earbud model, firmware version, Bluetooth address, or
-vendor advisory match. Those identifiers are required before a vulnerability
-claim or a fixture-specific reproduction can be responsibly selected. No
-advisory exploit or crafted RFCOMM traffic was run against the nearby device.
+The phone's current read-only Bluetooth dump lists a bonded device named
+`Damn's Noise Air Buds Pro 6`, but reports `STATE_DISCONNECTED`; its firmware,
+the other endpoint and an active connection were not established. No Bluetooth
+address is recorded here. Those identifiers and an active baseline are
+required before a vulnerability claim or fixture-specific reproduction can be
+responsibly selected. No advisory exploit or crafted RFCOMM traffic was run.
 
 Static inspection of the installed Noise application did find a Bestechnic-like
 (`BesOtaService`/`BES_TOTA_*`) OTA/control path with candidate GATT UUIDs
