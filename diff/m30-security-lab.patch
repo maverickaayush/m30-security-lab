@@ -1164,10 +1164,10 @@ index 0000000..9ad50f1
 +explicit `timeout` wrappers where a device or UI operation could hang.
 diff --git a/reports/deauth-feasibility.md b/reports/deauth-feasibility.md
 new file mode 100644
-index 0000000..79e00a3
+index 0000000..511c1bd
 --- /dev/null
 +++ b/reports/deauth-feasibility.md
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,67 @@
 +# Bluetooth disconnect feasibility
 +
 +The term “Bluetooth deauth” is too broad for a single command or capability.
@@ -1193,6 +1193,36 @@ index 0000000..79e00a3
 +owned GATT fixture. It does not expose the M30's internal SCSC connection
 +handles, and a host-side disconnect operation would only apply to a connection
 +owned by that adapter. No command was sent to disconnect a third-party link.
++
++## Target-specific advisory examples
++
++Public advisories demonstrate that a real third-party disconnect can be a
++product firmware vulnerability, but they are not generic Bluetooth features:
++
++* CERT/CC [VU#472136](https://kb.cert.org/vuls/id/472136) describes
++  CVE-2025-13328, a repeatable RFCOMM denial of service in Redmi Buds 3 Pro
++  through 6 Pro, and CVE-2025-13834, an information leak. The note names the
++  affected product family, an unauthenticated in-range prerequisite, and
++  firmware-side RFCOMM processing as the mechanism. It does not establish
++  relevance to a Noise earbud or the M30.
++* CERT/CC [VU#859658](https://kb.cert.org/vuls/id/859658) describes
++  CVE-2025-20701 in Skullcandy Dime 3 model S2DCW firmware 1.0.0.28, where an
++  unpaired device could pair without owner interaction. The vendor identified
++  1.0.0.30 as the effective patch, and the affected product does not match the
++  unknown lab fixture. This is an unauthorized pairing and audio-hijack case,
++  not a universal disconnect command.
++
++The lab has no exact earbud model, firmware version, Bluetooth address, or
++vendor advisory match. Those identifiers are required before a vulnerability
++claim or a fixture-specific reproduction can be responsibly selected. No
++advisory exploit or crafted RFCOMM traffic was run against the nearby device.
++
++Static inspection of the installed Noise application did find a Bestechnic-like
++(`BesOtaService`/`BES_TOTA_*`) OTA/control path with candidate GATT UUIDs
++`0000ae00`, `0000ae01`, and `0000ae02`. That path is reached after selecting and
++connecting to a compatible accessory and prepares vendor protocol writes. It is
++not a radio-wide control plane, and no code path from it to a popup or a
++third-party disconnect was found.
 +
 +## Nearby popup or custom message request
 +
@@ -1476,10 +1506,10 @@ index 0000000..91c0dc3
 +project.
 diff --git a/research/noise-firmware.md b/research/noise-firmware.md
 new file mode 100644
-index 0000000..e2c8d33
+index 0000000..adc7a38
 --- /dev/null
 +++ b/research/noise-firmware.md
-@@ -0,0 +1,79 @@
+@@ -0,0 +1,108 @@
 +# Noise package inspection
 +
 +Date: 2026-10-26 (Asia/Kolkata). This is a static inspection only. The Noise
@@ -1549,6 +1579,35 @@ index 0000000..e2c8d33
 +device would have to run a cooperating receiver or expose a specific vulnerable
 +protocol.
 +
++## Additional OTA protocol evidence
++
++The main APK does contain a real accessory firmware-update path. Android SDK
++`dexdump` on `classes2.dex` shows an obfuscated class whose static initializer
++constructs these UUIDs:
++
++```
++0000ae00-0000-1000-8000-00805F9B34FB  (service candidate)
++0000ae01-0000-1000-8000-00805F9B34FB  (characteristic candidate)
++0000ae02-0000-1000-8000-00805F9B34FB  (characteristic candidate)
++00002902-0000-1000-8000-00805f9b34fb  (CCCD)
++```
++
++Nearby bytecode strings and call paths include `BesBaseService`,
++`BesOtaService`, `startOta`, `sendCommandSetTOTAData`, `getStartOTAPacketCMD`,
++and `BES_TOTA_ENCRYPTION_KEY`. The path prepares byte arrays, optionally applies
++the app's TOTA encryption/transform helpers, and sends them through a selected
++`BluetoothDevice` and a `DeviceProtocol` object. This is evidence of a
++vendor-specific connected accessory OTA/control transport, not a broadcast
++message channel. The class and protocol names are partly obfuscated, so the
++exact command grammar and firmware format were not reconstructed from strings
++alone.
++
++The static result is useful for a future matched Noise accessory capture: an
++HCI snoop trace during an owner-initiated OTA operation could map these UUIDs,
++commands, and response statuses. It still cannot make an unrelated phone,
++computer, or earbud display a popup, and it cannot disconnect a link owned by a
++different controller.
++
 +No firmware binary or controller patch was identified by the archive filename
 +and DEX inspection. One 128,401-byte opaque asset,
 +`assets/aUnJzipEZbqMgIgx`, begins with `00 49 41 50 02 00 00 00` (an `IAP`
@@ -1561,10 +1620,10 @@ index 0000000..e2c8d33
 +available for an offline firmware audit.
 diff --git a/research/sources.md b/research/sources.md
 new file mode 100644
-index 0000000..b32fc7d
+index 0000000..43f3d80
 --- /dev/null
 +++ b/research/sources.md
-@@ -0,0 +1,22 @@
+@@ -0,0 +1,24 @@
 +# Primary sources and claim status
 +
 +Checked 2026-10-26.
@@ -1583,6 +1642,8 @@ index 0000000..b32fc7d
 +| [M30-family kernel tree](https://github.com/akhil1999/android_kernel_samsung_m30lte/tree/095206579f69121278ed1dd5fd0d7975c0705c6a) | SCSC path comparison | public family source, not confirmed exact build |
 +| [Kali NetHunter Bluetooth Arsenal](https://www.kali.org/docs/nethunter/nethunter-btarsenal/) | external/raw-controller requirements | official NetHunter documentation; no requirement demonstrated here |
 +| [REA repository](https://github.com/morluto/rea) and [REA security policy](https://github.com/morluto/rea/security) | reverse-engineering workflow and handling boundary | official repository read; not installed or invoked |
++| [CERT/CC VU#472136](https://kb.cert.org/vuls/id/472136) | current product-specific earbud DoS example | Redmi Buds 3 Pro through 6 Pro advisory; not matched to this lab fixture |
++| [CERT/CC VU#859658](https://kb.cert.org/vuls/id/859658) | current product-specific unauthenticated pairing example | Skullcandy Dime 3 S2DCW firmware 1.0.0.28 advisory; not matched to this lab fixture |
 +
 +The attached research document's citation markers were not treated as evidence.
 +Claims in the reports are labeled as observed, source-supported, inferred, or
