@@ -28,10 +28,10 @@ index 0000000..76c69fe
 +*.log
 diff --git a/README.md b/README.md
 new file mode 100644
-index 0000000..842486d
+index 0000000..874720b
 --- /dev/null
 +++ b/README.md
-@@ -0,0 +1,58 @@
+@@ -0,0 +1,74 @@
 +# M30 Bluetooth Security Lab
 +
 +Project for an owned Samsung SM-M305F (`m30lte`) running Android 10. The app uses Android Bluetooth APIs and never transmits on install or boot. Keep all RF tests inside the isolated lab; advertisements are broadcasts and cannot be contained by an address allowlist.
@@ -79,6 +79,22 @@ index 0000000..842486d
 +message only when an explicitly installed, opt-in receiver understands this
 +project UUID. The app does not impersonate pairing prompts or send arbitrary
 +messages to uninstalled devices.
++
++The laptop can act as one opted-in popup receiver:
++
++```bash
++cd ~/m30-security-lab
++python3 host/lab_popup_receiver.py --seconds 35
++```
++
++Run it while the phone sends a bounded LAB advertisement. The phone UI's
++four-character LAB popup text appears on this opted-in desktop. Use
++`--message 'Longer local text'` to override that text at the receiver. The
++receiver shows at most three notifications per run by default (maximum ten),
++does not connect or pair, and stops after at most 120 seconds. Other Linux
++desktops can run the same receiver. An Android or iOS device needs its own
++cooperating receiver app to display a custom message. Legacy advertisements
++on this phone cannot carry an arbitrary-length message alongside the LAB UUID.
 +
 +See [device capabilities](reports/device-capabilities.md), [test results](reports/test-results.md), [capture workflow](research/capture.md), [transport reverse engineering](research/hardware-reverse-engineering.md), [Noise package inspection](research/noise-firmware.md), and [disconnect feasibility](reports/deauth-feasibility.md).
 +
@@ -365,7 +381,7 @@ index 0000000..9778c80
 +}
 diff --git a/android/app/src/main/java/org/cattail/m30lab/MainActivity.kt b/android/app/src/main/java/org/cattail/m30lab/MainActivity.kt
 new file mode 100644
-index 0000000..b61910c
+index 0000000..dcd404e
 --- /dev/null
 +++ b/android/app/src/main/java/org/cattail/m30lab/MainActivity.kt
 @@ -0,0 +1,270 @@
@@ -459,7 +475,7 @@ index 0000000..b61910c
 +        text("UUID $labUuid • marker LAB • one legacy set • no automatic transmission")
 +        durationInput = input("Duration seconds (5–120)", "30")
 +        intervalInput = input("Payload change interval ms (1000–10000)", "1000")
-+        messageInput = input("Optional LAB marker (max 4 ASCII bytes; not a popup)", "LAB")
++        messageInput = input("LAB popup text (4 ASCII; opt-in receiver only)", "LAB")
 +        modeSpinner = spinner(arrayOf("Low power", "Balanced", "Low latency"))
 +        powerSpinner = spinner(arrayOf("Ultra low", "Low", "Medium", "High"))
 +        button("Start single LAB advertisement") { startAdv(false) }
@@ -897,6 +913,89 @@ index 0000000..fdc21a4
 +
 +if __name__ == "__main__":
 +    main()
+diff --git a/host/lab_popup_receiver.py b/host/lab_popup_receiver.py
+new file mode 100644
+index 0000000..09c8db9
+--- /dev/null
++++ b/host/lab_popup_receiver.py
+@@ -0,0 +1,77 @@
++#!/usr/bin/env python3
++"""Opt-in Linux desktop popup for this project's synthetic LAB advertisement.
++
++Requires BlueZ, python3-dbus, and notify-send. The receiver never pairs or
++connects. Only the project UUID and manufacturer marker can trigger a popup.
++"""
++
++import argparse
++import subprocess
++import time
++
++import dbus
++
++UUID = "7f5f42d6-4659-4c15-9fe7-7de7a7033b01"
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument("--seconds", type=int, default=35)
++    parser.add_argument("--message", help="Optional local message; otherwise show the phone's four-character LAB text")
++    parser.add_argument("--max-popups", type=int, default=3, help="Maximum desktop notifications (1-10; default 3)")
++    parser.add_argument("--dry-run", action="store_true", help="Print matching LAB events without a desktop popup")
++    args = parser.parse_args()
++    seconds = max(5, min(args.seconds, 120))
++    message = args.message.strip()[:120] if args.message else None
++    max_popups = max(1, min(args.max_popups, 10))
++    if args.message is not None and not message:
++        parser.error("--message must contain visible text")
++
++    bus = dbus.SystemBus()
++    manager = dbus.Interface(bus.get_object("org.bluez", "/"), "org.freedesktop.DBus.ObjectManager")
++    scan = subprocess.Popen(
++        ["bluetoothctl", "--timeout", str(seconds), "scan", "le"],
++        stdout=subprocess.DEVNULL,
++        stderr=subprocess.DEVNULL,
++    )
++    seen = set()
++    popups = 0
++    start = time.monotonic()
++    try:
++        while time.monotonic() - start < seconds:
++            for _, interfaces in manager.GetManagedObjects().items():
++                dev = interfaces.get("org.bluez.Device1")
++                if not dev or UUID not in [str(v).lower() for v in dev.get("UUIDs", [])]:
++                    continue
++                for company, data in dev.get("ManufacturerData", {}).items():
++                    raw = bytes(data)
++                    if int(company) != 0xffff or not raw.startswith(b"LAB") or len(raw) < 4:
++                        continue
++                    tag = raw[4:].decode("ascii", errors="replace")
++                    marker = (raw[3], tag)
++                    if marker in seen:
++                        continue
++                    seen.add(marker)
++                    popup_text = message or tag
++                    print(f"LAB marker counter={raw[3]} tag={tag!r}; popup={popup_text!r}", flush=True)
++                    if not args.dry_run and popups < max_popups:
++                        result = subprocess.run(
++                            ["notify-send", "--expire-time=5000", "M30 LAB message", popup_text],
++                            timeout=5,
++                            check=False,
++                        )
++                        print(f"notify-send exit={result.returncode}", flush=True)
++                        popups += 1
++            time.sleep(0.2)
++    finally:
++        scan.terminate()
++        try:
++            scan.wait(timeout=3)
++        except subprocess.TimeoutExpired:
++            scan.kill()
++            scan.wait(timeout=3)
++    print(f"Receiver stopped after {seconds}s; distinct LAB markers={len(seen)}; popups={popups}", flush=True)
++
++
++if __name__ == "__main__":
++    main()
 diff --git a/host/observe_lab.py b/host/observe_lab.py
 new file mode 100644
 index 0000000..3c0d8fa
@@ -1030,10 +1129,10 @@ index 0000000..6ca8565
 +    main()
 diff --git a/reports/command-log.md b/reports/command-log.md
 new file mode 100644
-index 0000000..7a00c71
+index 0000000..9ad50f1
 --- /dev/null
 +++ b/reports/command-log.md
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,29 @@
 +# Command and tool log
 +
 +Recorded 2026-10-26 (Asia/Kolkata). The ADB serial is intentionally omitted
@@ -1057,15 +1156,18 @@ index 0000000..7a00c71
 +| `./scripts/install.sh <serial>` | Exit 0; `Success`; package `org.cattail.m30lab` installed with project signing key |
 +| App scanner / advertiser / GATT fixture runs | See `reports/test-results.md`; all bounded deadlines and callback logs captured |
 +| Noise package paths, `dumpsys package`, APK pull, `aapt dump`, `dexdump` | Exit 0; static result in `research/noise-firmware.md` |
++| `python3 host/lab_popup_receiver.py --seconds 35` with phone LAB text `PING` | Exit 0; matched one marker, called `notify-send`, popup exit 0, stopped at 35 seconds |
++| `hciconfig hci0 version`; `bluetoothctl show` | Exit 0; external Realtek USB controller, HCI 5.3, BlueZ powered with zero active advertising instances |
++| Rebuilt `./scripts/build.sh` and `./scripts/install.sh <serial>` | Exit 0; APK SHA-256 `19bd828132a48c39695b2be1a948438b00ea87bd70f7374ba84dde7873028d06` |
 +
 +The host fixture and receiver use bounded timeouts. ADB helper commands use
 +explicit `timeout` wrappers where a device or UI operation could hang.
 diff --git a/reports/deauth-feasibility.md b/reports/deauth-feasibility.md
 new file mode 100644
-index 0000000..01f8384
+index 0000000..79e00a3
 --- /dev/null
 +++ b/reports/deauth-feasibility.md
-@@ -0,0 +1,27 @@
+@@ -0,0 +1,37 @@
 +# Bluetooth disconnect feasibility
 +
 +The term “Bluetooth deauth” is too broad for a single command or capability.
@@ -1081,6 +1183,16 @@ index 0000000..01f8384
 +The handset's `CONFIG_BT` is unset and `CONFIG_SCSC_BT_BLUEZ` is off. Its observed route is Android framework → vendor HAL → `/dev/scsc_h4_0` → SCSC controller. Root alone does not add an AF_BLUETOOTH socket or a Linux HCI controller. The project therefore does not supply a fabricated “deauth” command. The [Bluetooth SIG HCI specification](https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core_v6.3/out/en/host-controller-interface/host-controller-interface-functional-specification.html) defines HCI Disconnect with a local connection handle; [Android BluetoothGatt.disconnect()](https://developer.android.com/reference/android/bluetooth/BluetoothGatt#disconnect()) applies to the app's GATT link. The [M30-family source Kconfig](https://github.com/akhil1999/android_kernel_samsung_m30lte/blob/095206579f69121278ed1dd5fd0d7975c0705c6a/drivers/misc/samsung/scsc_bt/Kconfig) describes the optional BlueZ path. The running config, rather than that repository alone, establishes this handset's disabled path.
 +
 +Ownership of all nearby devices permits controlled testing but does not change the controller's command semantics. The earbud/host models and firmware were not supplied, so no vulnerability-specific claim can be made. Even with an external raw link-layer radio or sniffer, disrupting an unrelated connection requires a demonstrated target-specific mechanism and verification. A generic “works on every Bluetooth connection” result is unsupported.
++
++## Linux controller check
++
++The laptop's USB Realtek controller is a separate BlueZ `hci0` (HCI 5.3,
++`btusb`, central/peripheral roles). `hciconfig hci0 version` succeeded and
++`hcitool con` reported no connections at the time of the check. The adapter is
++useful for receiving the project's synthetic advertisements and for a bounded
++owned GATT fixture. It does not expose the M30's internal SCSC connection
++handles, and a host-side disconnect operation would only apply to a connection
++owned by that adapter. No command was sent to disconnect a third-party link.
 +
 +## Nearby popup or custom message request
 +
@@ -1142,10 +1254,10 @@ index 0000000..abd82c7
 +Android Bluetooth operating through the vendor HAL does not imply that BlueZ can open an internal `hci0`. No attempt was made to give Android and BlueZ concurrent ownership of the controller.
 diff --git a/reports/test-results.md b/reports/test-results.md
 new file mode 100644
-index 0000000..5c5df96
+index 0000000..fea36f9
 --- /dev/null
 +++ b/reports/test-results.md
-@@ -0,0 +1,85 @@
+@@ -0,0 +1,98 @@
 +# Test results
 +
 +Date: 2026-10-26 (Asia/Kolkata). Device identifiers and unrelated discovered
@@ -1160,7 +1272,7 @@ index 0000000..5c5df96
 +| `.../gradle --no-daemon testDebugUnitTest` | `BUILD SUCCESSFUL`; parser truncation and JSON/CSV quoting tests passed |
 +| `./scripts/build.sh` | `BUILD SUCCESSFUL` |
 +| `./scripts/install.sh <pinned serial>` | `Success`; package `org.cattail.m30lab` installed without replacing an unrelated package |
-+| latest APK SHA-256 | `dad854a9290f21cebd204bca8fe9c8f9dcf6f8c48c74a80840dea6e1f9fbae0d` |
++| latest APK SHA-256 | `19bd828132a48c39695b2be1a948438b00ea87bd70f7374ba84dde7873028d06` |
 +
 +The app was launched from ADB. It does not contain a boot receiver and did not
 +start RF transmission on install or launch.
@@ -1198,6 +1310,19 @@ index 0000000..5c5df96
 +After this tag change, a fresh 35-second host receiver run observed counter 0
 +with tag `LAB` at approximately -62 dBm. The phone callback accepted the
 +advertisement, and leaving the activity triggered the app's cleanup path.
++
++A later 35-second Linux BlueZ popup receiver run matched one LAB marker from
++the M30 and called `notify-send` for the explicit message “Owned lab receiver
++test”; the command exited 0. The Linux desktop notification service was
++present. This demonstrates an opted-in host popup, not a popup on an unrelated
++nearby device.
++
++A repeat run with the phone UI field set to `PING` matched that marker and
++called `notify-send` with the text `PING`; it exited 0. The receiver stopped at
++35 seconds and reported one distinct marker and one popup. The receiver's
++default is capped at three desktop notifications per run, with a command-line
++maximum of ten, to keep bounded sequence tests from becoming an unbounded local
++notification loop.
 +
 +## GATT fixture
 +
@@ -1250,10 +1375,10 @@ index 0000000..705e9f2
 +HCI snoop records the phone host/controller interface. It is not a promiscuous over-the-air capture of unrelated links. A separate owned BLE receiver or purpose-built sniffer is needed for independent RF confirmation. The laptop's `btusb` receiver can confirm received advertisements; it is not a raw link-layer sniffer for other connections. See [AOSP Bluetooth verification and debugging](https://source.android.com/docs/core/connect/bluetooth/verifying_debugging).
 diff --git a/research/hardware-reverse-engineering.md b/research/hardware-reverse-engineering.md
 new file mode 100644
-index 0000000..ae10fa3
+index 0000000..91c0dc3
 --- /dev/null
 +++ b/research/hardware-reverse-engineering.md
-@@ -0,0 +1,87 @@
+@@ -0,0 +1,95 @@
 +# Hardware and transport reverse engineering
 +
 +Date: 2026-10-26 (Asia/Kolkata)
@@ -1300,6 +1425,14 @@ index 0000000..ae10fa3
 +AF_BLUETOOTH is therefore explained by the running kernel configuration and
 +does not imply that the internal radio is missing.
 +
++By comparison, the laptop's Realtek `0bda:b86a` adapter is bound to `btusb` and
++appears as `hci0` in `hciconfig`. Its HCI version reports Bluetooth 5.3 and
++BlueZ reports central/peripheral roles and no active advertising instances at
++inspection. This is a working Linux Bluetooth interface for receiver and
++fixture tests. It is a laptop controller, not a path into the phone's SCSC
++controller. The `host/lab_popup_receiver.py` test used it to receive the M30
++LAB marker and trigger one desktop notification.
++
 +## Matching source comparison
 +
 +The public M30-family kernel tree
@@ -1343,10 +1476,10 @@ index 0000000..ae10fa3
 +project.
 diff --git a/research/noise-firmware.md b/research/noise-firmware.md
 new file mode 100644
-index 0000000..54b2bef
+index 0000000..e2c8d33
 --- /dev/null
 +++ b/research/noise-firmware.md
-@@ -0,0 +1,61 @@
+@@ -0,0 +1,79 @@
 +# Noise package inspection
 +
 +Date: 2026-10-26 (Asia/Kolkata). This is a static inspection only. The Noise
@@ -1368,6 +1501,15 @@ index 0000000..54b2bef
 +evidence/noise-static/firmwarelab.apk
 +SHA-256 279fba9466633158c2c82b5f8dd3f663f6c4c2f5c07b6e66c6c2ca3b79bd7e0a
 +```
++
++The installed Noise audio base APK was also copied for local static comparison
++and has SHA-256
++`58ca78ed3460f8772b933699c1462facaec0c7e21c7a7b7722edeaf7fd741fed`.
++Its `classes.dex`, `classes2.dex`, and `classes3.dex` are byte-identical to the
++first three DEX files in the firmware-lab APK. The firmware-lab package adds a
++small fourth DEX with the lookup activity. This makes the two package names
++part of the same app-code family, but does not make the lookup activity a
++Bluetooth transport.
 +
 +The APK manifest identifies its label as `Noise Firmware Lab` and its activity
 +as `com.noise.audio.firmwarelab.ProbeActivity`. It has no Bluetooth, location,
@@ -1398,16 +1540,25 @@ index 0000000..54b2bef
 +
 +The installed `com.noise.audio` package requests Bluetooth permissions and has a
 +`NotificationListenerService` protected by Android's
-+`BIND_NOTIFICATION_LISTENER_SERVICE`. Those permissions allow the app to manage
-+an owned audio accessory and observe notifications on the phone after the user
-+grants access. They do not provide a protocol for causing arbitrary nearby
-+devices to show a popup. A target device would have to run a cooperating
-+receiver or expose a product-specific vulnerable protocol.
++`BIND_NOTIFICATION_LISTENER_SERVICE`. Targeted DEX inspection of that class
++shows `MediaSessionManager`, `MediaController`, `PlaybackState`, and music-mode
++state updates. In the inspected class there was no `onNotificationPosted`
++override or demonstrated path for sending an arbitrary popup to nearby
++devices. Bluetooth permissions let the app manage compatible accessories;
++they do not grant another device's user interface to this phone. A target
++device would have to run a cooperating receiver or expose a specific vulnerable
++protocol.
 +
-+No firmware binary, controller patch, or over-the-air popup implementation was
-+present in the package inspected. The result is therefore a negative finding:
-+Noise's installed firmware-lab logic cannot supply the requested universal
-+popup capability, and it does not change the M30 deauth conclusion.
++No firmware binary or controller patch was identified by the archive filename
++and DEX inspection. One 128,401-byte opaque asset,
++`assets/aUnJzipEZbqMgIgx`, begins with `00 49 41 50 02 00 00 00` (an `IAP`
++prefix), but `file` recognizes it only as data. Its SHA-256 is
++`4c7c7ed73db102420bab56c004069e6e21678fe397aef477a35325140460cb9c`.
++It has not been established as earbud firmware, and its purpose remains
++unknown. The firmware-lab lookup
++activity cannot supply a universal popup capability, and the inspected Noise
++code does not change the M30 deauth conclusion. No earbuds firmware image was
++available for an offline firmware audit.
 diff --git a/research/sources.md b/research/sources.md
 new file mode 100644
 index 0000000..b32fc7d
