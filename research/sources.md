@@ -16,6 +16,8 @@ Checked 2026-10-26.
 | [M30-family kernel tree](https://github.com/akhil1999/android_kernel_samsung_m30lte/tree/095206579f69121278ed1dd5fd0d7975c0705c6a) | SCSC path comparison | public family source, not confirmed exact build |
 | [Kali NetHunter Bluetooth Arsenal](https://www.kali.org/docs/nethunter/nethunter-btarsenal/) | external/raw-controller requirements | official NetHunter documentation; no requirement demonstrated here |
 | [REA repository](https://github.com/morluto/rea) and [REA security policy](https://github.com/morluto/rea/security) | reverse-engineering workflow and handling boundary | official repository read; not installed or invoked |
+| [CERT/CC VU#472136](https://kb.cert.org/vuls/id/472136) | current product-specific earbud DoS example | Redmi Buds 3 Pro through 6 Pro advisory; not matched to this lab fixture |
+| [CERT/CC VU#859658](https://kb.cert.org/vuls/id/859658) | current product-specific unauthenticated pairing example | Skullcandy Dime 3 S2DCW firmware 1.0.0.28 advisory; not matched to this lab fixture |
 
 The attached research document's citation markers were not treated as evidence.
 Claims in the reports are labeled as observed, source-supported, inferred, or

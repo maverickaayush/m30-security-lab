@@ -24,6 +24,36 @@ owned GATT fixture. It does not expose the M30's internal SCSC connection
 handles, and a host-side disconnect operation would only apply to a connection
 owned by that adapter. No command was sent to disconnect a third-party link.
 
+## Target-specific advisory examples
+
+Public advisories demonstrate that a real third-party disconnect can be a
+product firmware vulnerability, but they are not generic Bluetooth features:
+
+* CERT/CC [VU#472136](https://kb.cert.org/vuls/id/472136) describes
+  CVE-2025-13328, a repeatable RFCOMM denial of service in Redmi Buds 3 Pro
+  through 6 Pro, and CVE-2025-13834, an information leak. The note names the
+  affected product family, an unauthenticated in-range prerequisite, and
+  firmware-side RFCOMM processing as the mechanism. It does not establish
+  relevance to a Noise earbud or the M30.
+* CERT/CC [VU#859658](https://kb.cert.org/vuls/id/859658) describes
+  CVE-2025-20701 in Skullcandy Dime 3 model S2DCW firmware 1.0.0.28, where an
+  unpaired device could pair without owner interaction. The vendor identified
+  1.0.0.30 as the effective patch, and the affected product does not match the
+  unknown lab fixture. This is an unauthorized pairing and audio-hijack case,
+  not a universal disconnect command.
+
+The lab has no exact earbud model, firmware version, Bluetooth address, or
+vendor advisory match. Those identifiers are required before a vulnerability
+claim or a fixture-specific reproduction can be responsibly selected. No
+advisory exploit or crafted RFCOMM traffic was run against the nearby device.
+
+Static inspection of the installed Noise application did find a Bestechnic-like
+(`BesOtaService`/`BES_TOTA_*`) OTA/control path with candidate GATT UUIDs
+`0000ae00`, `0000ae01`, and `0000ae02`. That path is reached after selecting and
+connecting to a compatible accessory and prepares vendor protocol writes. It is
+not a radio-wide control plane, and no code path from it to a popup or a
+third-party disconnect was found.
+
 ## Nearby popup or custom message request
 
 The phone can broadcast a synthetic LAB marker and can exchange a message with

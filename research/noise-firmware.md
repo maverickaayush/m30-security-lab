@@ -67,6 +67,35 @@ they do not grant another device's user interface to this phone. A target
 device would have to run a cooperating receiver or expose a specific vulnerable
 protocol.
 
+## Additional OTA protocol evidence
+
+The main APK does contain a real accessory firmware-update path. Android SDK
+`dexdump` on `classes2.dex` shows an obfuscated class whose static initializer
+constructs these UUIDs:
+
+```
+0000ae00-0000-1000-8000-00805F9B34FB  (service candidate)
+0000ae01-0000-1000-8000-00805F9B34FB  (characteristic candidate)
+0000ae02-0000-1000-8000-00805F9B34FB  (characteristic candidate)
+00002902-0000-1000-8000-00805f9b34fb  (CCCD)
+```
+
+Nearby bytecode strings and call paths include `BesBaseService`,
+`BesOtaService`, `startOta`, `sendCommandSetTOTAData`, `getStartOTAPacketCMD`,
+and `BES_TOTA_ENCRYPTION_KEY`. The path prepares byte arrays, optionally applies
+the app's TOTA encryption/transform helpers, and sends them through a selected
+`BluetoothDevice` and a `DeviceProtocol` object. This is evidence of a
+vendor-specific connected accessory OTA/control transport, not a broadcast
+message channel. The class and protocol names are partly obfuscated, so the
+exact command grammar and firmware format were not reconstructed from strings
+alone.
+
+The static result is useful for a future matched Noise accessory capture: an
+HCI snoop trace during an owner-initiated OTA operation could map these UUIDs,
+commands, and response statuses. It still cannot make an unrelated phone,
+computer, or earbud display a popup, and it cannot disconnect a link owned by a
+different controller.
+
 No firmware binary or controller patch was identified by the archive filename
 and DEX inspection. One 128,401-byte opaque asset,
 `assets/aUnJzipEZbqMgIgx`, begins with `00 49 41 50 02 00 00 00` (an `IAP`
