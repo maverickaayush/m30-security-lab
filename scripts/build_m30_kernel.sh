@@ -10,6 +10,7 @@ set -euo pipefail
 #   ... scripts/build_m30_kernel.sh bluez
 #   ... scripts/build_m30_kernel.sh bluez-verity
 #   ... scripts/build_m30_kernel.sh bluez-minimal
+#   ABOX_IO_PATCH=1 ... scripts/build_m30_kernel.sh bluez-minimal
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 SRC=${SRC:?set SRC to the checked-out kernel source}
@@ -17,6 +18,7 @@ OUT=${OUT:?set OUT to an isolated output directory}
 CROSS_COMPILE=${CROSS_COMPILE:?set CROSS_COMPILE to an AArch64 prefix}
 MODE=${1:-baseline}
 EXPECTED_COMMIT=095206579f69121278ed1dd5fd0d7975c0705c6a
+ABOX_IO_PATCH=${ABOX_IO_PATCH:-0}
 
 case "$MODE" in
   baseline|bluez|bluez-verity|bluez-minimal) ;;
@@ -37,6 +39,9 @@ HOSTCFLAGS=${HOSTCFLAGS:-'-Wall -Wmissing-prototypes -Wstrict-prototypes -O2 -fo
 KCFLAGS=${KCFLAGS:-'-Wno-error -Wno-error=enum-int-mismatch -Wno-error=restrict -Wno-error=stringop-overflow -Wno-error=array-bounds -Wno-error=array-compare -Wno-error=address-of-packed-member -Wno-error=misleading-indentation -Wno-error=zero-length-bounds -Wno-error=dangling-pointer -D__ANDROID__'}
 
 cleanup_source() {
+  if [ "$ABOX_IO_PATCH" = 1 ]; then
+    git -C "$SRC" apply --reverse "$ROOT/research/kernel/abox-io-copy.patch" 2>/dev/null || true
+  fi
   if [ "$MODE" = bluez ] || [ "$MODE" = bluez-verity ] || [ "$MODE" = bluez-minimal ]; then
     git -C "$SRC" checkout -- drivers/misc/samsung/scsc_bt/scsc_bluez.c
   fi
@@ -61,6 +66,10 @@ if [ "$MODE" = bluez ] || [ "$MODE" = bluez-verity ] || [ "$MODE" = bluez-minima
     "$OUT/.config" "$FRAGMENT")
   make -C "$SRC" O="$OUT" ARCH=arm64 ANDROID_MAJOR_VERSION=q \
     CROSS_COMPILE="$CROSS_COMPILE" HOSTCFLAGS="$HOSTCFLAGS" olddefconfig
+fi
+
+if [ "$ABOX_IO_PATCH" = 1 ]; then
+  git -C "$SRC" apply "$ROOT/research/kernel/abox-io-copy.patch"
 fi
 
 make -C "$SRC" O="$OUT" ARCH=arm64 ANDROID_MAJOR_VERSION=q \

@@ -13,6 +13,16 @@ test ! -e "$WORK" || { echo 'WORK must not exist' >&2; exit 2; }
 test -r "$LIVE_BOOT" && test -r "$KERNEL_IMAGE" && test -x "$AIK/unpackimg.sh"
 test "$(stat -c %s "$LIVE_BOOT")" -eq 33554432
 test "$(sha256sum "$LIVE_BOOT" | cut -d' ' -f1)" = "$EXPECTED_LIVE_SHA256"
+
+# This exact live Magisk BOOT has the legacy-SAR kernel patch
+# skip_initramfs -> want_initramfs. A raw family Image without that patch
+# discards the preserved Magisk ramdisk. The first boot trial exposed this
+# mismatch, so reject such a package before repacking.
+if rg -aq 'want_initramfs' "$LIVE_BOOT" && ! rg -aq 'want_initramfs' "$KERNEL_IMAGE"; then
+  echo 'Kernel lacks the want_initramfs patch present in the live Magisk BOOT.' >&2
+  echo 'Prepare and verify a patched kernel copy before packaging.' >&2
+  exit 2
+fi
 mkdir -m 700 "$WORK"
 mkdir -m 700 "$WORK/roundtrip" "$WORK/candidate"
 

@@ -1,0 +1,110 @@
+diff --git a/sound/soc/samsung/abox/abox.c b/sound/soc/samsung/abox/abox.c
+index 674e3f03..38fc13ad 100755
+--- a/sound/soc/samsung/abox/abox.c
++++ b/sound/soc/samsung/abox/abox.c
+@@ -336,7 +336,7 @@ static int abox_start_ipc_transaction_atomic(struct device *dev,
+ 		break;
+ 	}
+ 
+-	memcpy(tx_sram_base, supplement, size);
++	memcpy_toio(tx_sram_base, supplement, size);
+ 	writel(1, tx_ack_sram_base);
+ 	abox_gic_generate_interrupt(data->pdev_gic, hw_irq);
+ 
+@@ -403,7 +403,7 @@ static void abox_process_ipc(struct work_struct *work)
+ 		dev_dbg(dev, "%s(%d, %zu)\n", __func__, hw_irq, size);
+ 
+ 		*state = SEND_MSG;
+-		memcpy(tx_sram_base, supplement, size);
++		memcpy_toio(tx_sram_base, supplement, size);
+ 		abox_gic_generate_interrupt(data->pdev_gic, hw_irq);
+ 		result = wait_event_timeout(data->ipc_wait_queue,
+ 				(*state == SEND_MSG_OK ||
+@@ -4388,7 +4388,7 @@ static bool abox_is_calliope_incompatible(struct platform_device *pdev)
+ 	ABOX_IPC_MSG msg;
+ 	struct IPC_SYSTEM_MSG *system_msg = &msg.msg.system;
+ 
+-	memcpy(&msg, data->sram_base + 0x30040, 0x3C);
++	memcpy_fromio(&msg, data->sram_base + 0x30040, 0x3C);
+ 
+ 	return ((system_msg->param3 >> 24) == 'A');
+ }
+@@ -4759,7 +4759,7 @@ static irqreturn_t abox_irq_handler(int irq, void *dev_id)
+ 	if (abox_dma_irq_handler(irq, data) == IRQ_HANDLED)
+ 		return IRQ_HANDLED;
+ 
+-	memcpy(&msg, data->sram_base + data->ipc_rx_offset, sizeof(msg));
++	memcpy_fromio(&msg, data->sram_base + data->ipc_rx_offset, sizeof(msg));
+ 	writel(0, data->sram_base + data->ipc_rx_ack_offset);
+ 
+ 	dev_dbg(dev, "%s: irq=%d, ipcid=%d\n", __func__, irq, msg.ipcid);
+@@ -4994,8 +4994,12 @@ static void abox_reload_extra_firmware(struct abox_data *data, const char *name)
+ 			break;
+ 		}
+ 
+-		memcpy(base + ext_fw->offset, ext_fw->firmware->data,
+-				ext_fw->firmware->size);
++		if (ext_fw->area == 0)
++			memcpy_toio(base + ext_fw->offset, ext_fw->firmware->data,
++					ext_fw->firmware->size);
++		else
++			memcpy(base + ext_fw->offset, ext_fw->firmware->data,
++					ext_fw->firmware->size);
+ 		dev_info(dev, "%s: %s is downloaded at area %u offset %u\n",
+ 				__func__, ext_fw->name, ext_fw->area,
+ 				ext_fw->offset);
+@@ -5096,8 +5100,12 @@ static void abox_download_extra_firmware(struct abox_data *data)
+ 			continue;
+ 		}
+ 
+-		memcpy(base + ext_fw->offset, ext_fw->firmware->data,
+-				ext_fw->firmware->size);
++		if (ext_fw->area == 0)
++			memcpy_toio(base + ext_fw->offset, ext_fw->firmware->data,
++					ext_fw->firmware->size);
++		else
++			memcpy(base + ext_fw->offset, ext_fw->firmware->data,
++					ext_fw->firmware->size);
+ 		dev_info(dev, "%s: %s is downloaded at area %u offset %u\n",
+ 				__func__, ext_fw->name, ext_fw->area,
+ 				ext_fw->offset);
+@@ -5116,7 +5124,7 @@ static int abox_download_firmware(struct platform_device *pdev)
+ 		return -EAGAIN;
+ 	}
+ 	memset_io(data->sram_base, 0, data->sram_size);
+-	memcpy(data->sram_base, data->firmware_sram->data,
++	memcpy_toio(data->sram_base, data->firmware_sram->data,
+ 			data->firmware_sram->size);
+ 
+ 	if (!data->firmware_dram) {
+diff --git a/sound/soc/samsung/abox/abox_synchronized_ipc.c b/sound/soc/samsung/abox/abox_synchronized_ipc.c
+index 0cfc0968..c4b5544e 100755
+--- a/sound/soc/samsung/abox/abox_synchronized_ipc.c
++++ b/sound/soc/samsung/abox/abox_synchronized_ipc.c
+@@ -128,7 +128,7 @@ int tfadsp_write(int devidx, int size, void *buf)
+ 	erap_msg->param.raw.params[0] = TFADSP_CMD_WRITE;
+ 	erap_msg->param.raw.params[1] = size;
+ 
+-	memcpy(smem_write_buf, tfadrv_write_buf, size);
++	memcpy_toio(smem_write_buf, tfadrv_write_buf, size);
+ 	abox_ipc_write_avail = false;
+ 	abox_ipc_write_error = TFADSP_SUCCESS;
+ 
+@@ -173,7 +173,7 @@ static irqreturn_t abox_synchronized_ipc_handler(int irq,
+ 		case TFADSP_RES_READ:
+ 			smem_read_buf =
+ 			(char *)abox_addr_to_kernel_addr(aboxdata, SMEM_READ);
+-			memcpy(tfadrv_read_buf, smem_read_buf, size);
++			memcpy_fromio(tfadrv_read_buf, smem_read_buf, size);
+ 			abox_ipc_read_avail = true;
+ 			abox_ipc_read_error = TFADSP_SUCCESS;
+ 			ipc_dbg("TFADSP_CMD_READ DONE size= %d", size);
+@@ -183,7 +183,7 @@ static irqreturn_t abox_synchronized_ipc_handler(int irq,
+ 		case TFADSP_RES_BLACKBOX:
+ 			smem_read_buf =
+ 			(char *)abox_addr_to_kernel_addr(aboxdata, SMEM_READ);
+-			memcpy(tfadrv_read_buf, smem_read_buf, size);
++			memcpy_fromio(tfadrv_read_buf, smem_read_buf, size);
+ 			abox_ipc_read_avail = true;
+ 			abox_ipc_read_error = TFADSP_SUCCESS;
+ 			ipc_dbg("TFADSP_CMD_BLACKBOX DONE size= %d", size);

@@ -139,3 +139,19 @@ the vendor ELFs and firmware image remain private.
 | TWRP screen and return | User observed TWRP after button sequence; Reboot → System returned ADB to original build/kernel, SELinux enforcing and Bluetooth on; recovery ADB/restore not tested |
 | Post-recovery phone backup rehash | Exit 0; BOOT/DTB/DTBO/RECOVERY phone copies retained their manifest SHA-256 values |
 | `python3 -m unittest discover -s tests -p 'test_stock_zip.py' -v` | Exit 0; synthetic metadata-footer and corruption cases passed |
+
+
+## 2026-10-27 ABOX fix live trial
+
+| Check | Result |
+|---|---|
+| Fresh-session Heimdall 2.1.0 BOOT upload | Exit 0, 23:49:40 Asia/Kolkata; candidate hash 3bd30a1df1f30162cf316c31a6ca88997770fa79844d1b192b6fc20ff68455ec; reboot requested |
+| Serial-pinned Android health | boot_completed=1; kernel 4.4.177-g09520657-dirty; Enforcing; /data mounted; Magisk root available |
+| Live configuration | CONFIG_BT=y, CONFIG_SCSC_BT_BLUEZ=y, CONFIG_DM_VERITY=y |
+| Linux controller | No hci0 registered; no power-control/rfkill change performed |
+| Android Bluetooth | Manager reports enabled/ON; exchange not retested on this kernel |
+| Extended privileged ownership/readback query | Timed out at 30 seconds; no readback/ownership result claimed |
+| Later shell health | boot_completed=1, uptime 161 seconds |
+
+See research/abox-panic-and-io-fix-2026-10-27.md for source evidence,
+remaining Wi-Fi warnings and the inaccurate legacy baseline filename.
