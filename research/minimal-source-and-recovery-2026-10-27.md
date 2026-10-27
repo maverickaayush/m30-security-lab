@@ -23,3 +23,15 @@ The verified PIT maps BOOT to partition ID 12, size 32 MiB (`mmcblk0p12`), and R
 ## Decision boundary
 
 Preserving the live embedded DTBH and ramdisk removes the identified board-clock, camera-regulator and Magisk/verity deltas. The remaining source differences are specific, not a generic “source mismatch”: missing live FMM/debug hooks and unproven secure-world/driver ABI. Live symbols show the FMM path exists, but no evidence shows it is needed before Android mounts storage; the debug watchdog option may affect fault handling rather than ordinary boot. These are functional/security risks to measure during a controlled boot trial, not proof that the image cannot boot. A future controlled boot experiment is a justified way to test residual runtime uncertainty **once an independent external rollback copy and a concrete host restore utility/procedure are checked**. This investigation does not flash.
+
+## Durability amendment (2026-10-27)
+
+The earlier backup paragraph was written before the approved storage cleanup
+and is superseded for current capacity. The rollback set, exact stock archive,
+baseline package and Bluetooth candidate now also have a persistent copy at
+`/home/aayush-yadav/m30-rollback-20261027/`. The copied files were hashed after
+copying, compared byte-for-byte with their sources, and the stock ZIP passed a
+full `unzip -tqq` test. The host root filesystem has about 1.6 GB free. This is
+still one physical laptop disk plus the phone copy; no external disk is
+mounted. Live Heimdall detection remains the final non-writing recovery check
+before a possible BOOT-only trial.

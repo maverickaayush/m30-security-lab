@@ -17,6 +17,18 @@ This report supersedes the compatibility conclusions in `readiness-gates-2026-10
 
 The candidate is **technically prepared for a controlled boot experiment but not operationally ready to install today**. Most prior configuration and device-tree mismatches are eliminated, so “not stock-matched” alone is no longer a useful stop reason. The remaining enabled source gaps have identifiable roles and can be treated as explicit trial risks with rollback. The concrete operational blockers are the lack of an independent external backup and no live test of the host's proposed restore utility. A controlled trial would require those safeguards, a current device/hash recheck, and a prewritten stop rule. This investigation explicitly excludes flashing.
 
+### Superseding durability note (2026-10-27)
+
+The laptop was selected as the off-phone backup location. The original images,
+stock archive, PIT and both untested packages now have a persistent, restricted
+copy at `/home/aayush-yadav/m30-rollback-20261027/`, with a complete manifest
+and independent hash verification. This resolves the prior volatile-host-copy
+condition. It does not create protection against failure of the laptop's one
+physical disk, and it does not test a restore. The remaining operational gate
+is a live non-writing Heimdall detection/PIT check, followed by the already
+documented baseline-first decision.
+
 For a future authorized single-partition trial, the proposed write set is **BOOT only**. The candidate package SHA-256 is `9cf8c2159324796f3fb5fa993c7abdc5438edc59f8245ea602c99a429aea81c9`; the original BOOT rollback SHA-256 is `a63676cd0ed5d90cfca66aaa744c173886b72606aec64ea174575f44250064d4`. Verify both on durable media first. Preserve all other partitions. On first boot check ADB, kernel identity, SELinux, decryption/storage, USB, Wi-Fi, Android Bluetooth and crash logs **before** trying Linux HCI. If boot fails, restore the original BOOT via the verified TWRP/Download plan and check the original Android baseline; do not stack more patches.
 
-**Next action:** attach independent external storage and copy/hash the original BOOT, RECOVERY, PIT/manifest, exact stock archive and minimal candidate there. This makes the prepared controlled trial recoverable without relying on the laptop's nearly full root disk or the phone's own user data.
+**Next action:** repeat a non-writing Heimdall `detect` and PIT check while the
+phone is in Download Mode. No image write is part of that check.
