@@ -11,7 +11,7 @@ Project for an owned Samsung SM-M305F (`m30lte`) running Android 10. The app use
 - `research/`: source-backed hardware and API notes
 - `evidence/`: private captures/logs (ignored from Git)
 - `reports/`: redacted observations and feasibility assessment
-- `backups/`: private backup staging; none taken during this task
+- `backups/`: ignored private partition backups, stock package and offline candidate images
 - `tests/`: manual test procedures
 - `diff/`: local review diffs (generated files ignored)
 
@@ -90,6 +90,15 @@ and [proof-of-concept results](research/experiment-results.md). The read-only
 The proposed internal HCI kernel config and source readiness checks are in
 [kernel HCI readiness](research/kernel-hci-readiness.md). They are offline
 research artifacts; no kernel image has been installed on the phone.
+
+The 2026-10-27 minimal-kernel continuation classified [all 46 earlier config
+differences](research/config-difference-classification-2026-10-27.md),
+[compared all embedded device trees](research/minimal-device-tree-review-2026-10-27.md),
+[rebuilt and validated an offline candidate](research/minimal-candidate-build-2026-10-27.md),
+and recorded [source/recovery gaps](research/minimal-source-and-recovery-2026-10-27.md)
+and the [installation decision](research/minimal-readiness-decision-2026-10-27.md).
+The candidate retains the live embedded device tree and Magisk ramdisk.
+Nothing was flashed; the phone still runs its original kernel.
 
 The source audit of the required repository and the maintained replacement
 harness are in [blue-deauth audit](research/blue-deauth-audit.md). A dry run
