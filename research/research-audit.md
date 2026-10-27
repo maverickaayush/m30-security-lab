@@ -74,6 +74,33 @@ RECOVERY were made and the live-source, phone-copy and volatile-host hashes
 matched. No durable second copy or recovery boot test exists; see the
 installation manifest and readiness-gate report.
 
+Continuation (2026-10-27, durability/package follow-up): the rollback images
+were copied to the ignored persistent host path
+`backups/private-20261027/` (0700 directory, 0600 files), and independent
+digest sets matched the volatile copies. No separate physical storage was
+available. DTB and DTBO resolved to distinct 8 MiB block devices and were
+both genuinely zero-filled; the identical hash was not caused by an alias or
+duplicate copy. The exact `M305FDDS8CVB2`/`INS` FUS tuple was returned by the
+pinned `samloader-rs` query, but the AP/BL/CP/CSC bytes were not acquired due
+to host capacity. A corrected `bluez-verity` family build restored observed
+dm-verity/USB/debug choices and produced a re-parsed package; it remains
+unbooted and source/ABI compatibility is unproven.
+
+| Claim | Supporting artifact | Status | Missing verification |
+| --- | --- | --- | --- |
+| BOOT/DTB/DTBO/RECOVERY have a persistent host copy | Ignored `backups/private-20261027/`, private manifest and digest comparison | O/high for copy equality | Independent physical copy and restore test |
+| DTB and DTBO identical hashes are genuine empty partitions | Private `dtb-investigation.txt`; distinct mmcblk paths, sizes, `cmp` and zero samples | O/high | Samsung package/boot-time DTB selection |
+| Samsung FUS identifies the exact installed package tuple | `research/firmware-acquisition-2026-10-27.md`; samloader 2.2.0 output | O+S/high for metadata | Local package bytes, distributor checksum provenance and offline AP comparison |
+| Corrected candidate preserves observed verity choices | `research/kernel/m30lte-hci-verity.fragment`; build log and `.config` hash | O/high for offline configuration/build | Boot, storage/decryption and bootloader acceptance |
+| Corrected candidate is installation-ready | Same package/DTB/source evidence | U/high that this is established | Exact source/ABI, stock package and recovery/download return path |
+
+Later 2026-10-27 evidence narrows two cells above: the exact INS archive was
+acquired directly through FUS and its ZIP/TAR checks passed. Download Mode
+was detected, its PIT read, and the user-observed TWRP screen returned to
+Android with the original kernel and Bluetooth enabled. Source/ABI differences,
+independent backup storage and an actual restore test remain open. See the
+current [readiness gates](readiness-gates-2026-10-27.md).
+
 ## Follow-on implementation audit (2026-10-26)
 
 | Claim | Supporting artifact | Status | Missing verification |

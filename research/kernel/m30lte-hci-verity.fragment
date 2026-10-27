@@ -1,0 +1,20 @@
+# Corrected research fragment for a SOURCE-MATCHED M305FDDS8CVB2 tree.
+# Keep the Bluetooth experiment separate while matching observed storage,
+# verification, USB-role and SCSC-debug choices from the running handset.
+CONFIG_BT=y
+CONFIG_BT_BREDR=y
+CONFIG_BT_LE=y
+CONFIG_BT_RFCOMM=y
+CONFIG_BT_RFCOMM_TTY=y
+CONFIG_SCSC_BT=y
+CONFIG_SCSC_BT_BLUEZ=y
+
+CONFIG_DM_VERITY=y
+CONFIG_DM_VERITY_FEC=n
+CONFIG_DM_VERITY_AVB=n
+CONFIG_DM_ANDROID_VERITY_AT_MOST_ONCE_DEFAULT_ENABLED=y
+
+CONFIG_USB_OTG=n
+CONFIG_SCSC_DEBUG=n
+CONFIG_SCSC_DEBUG_COMPATIBILITY=n
+CONFIG_SCSC_STATIC_RING=n

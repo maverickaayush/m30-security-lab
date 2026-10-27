@@ -69,6 +69,15 @@ firmware lookup is HTTPS metadata; it is not a broadcast-popup protocol.
 |---|---|---|---|---|---|---|
 | Rollback partition copies | Hash-equal copies created | Live-source, phone-copy and host-copy hashes match for BOOT/DTB/DTBO/RECOVERY | N/A | Read-only source and copy checks | Durable independent storage and restore procedure | Host copy is volatile; recovery/download path untested |
 | Stock boot package parsing | Yes, static | AIK recognized AOSP image; unchanged round-trip was byte-identical | N/A | Read-only partition copy | Device-specific signing/acceptance validation | No Samsung package or boot test |
-| Bluetooth candidate boot package | Structurally valid only | Candidate unpacked with matching kernel/DTB/ramdisk hashes and fits BOOT size | Yes | No | Exact source/config/ABI and verity match | Candidate disables live DM-verity and changes DTB |
-| Android storage/decryption after candidate | Not tested | Live config has DM-verity; candidate differs | Candidate includes family storage config only | No | Preserve matched storage/verity config | No exact source or boot validation |
+| Bluetooth candidate boot package | Structurally valid only | Corrected `bluez-verity` package unpacked with matching kernel/DTB/ramdisk hashes and fits BOOT size | Yes | No | Exact source/config/ABI, DTB and signing acceptance | Family source/DTB and boot acceptance remain unresolved |
+| Android storage/decryption after candidate | Not tested | Corrected candidate restores observed dm-verity symbols; no boot evidence | Candidate includes verity-compatible config | No | Boot-test storage, encryption and Android health | No exact source or runtime validation |
 | Recovery return | Unknown | TWRP ramdisk statically present in RECOVERY | N/A | No recovery boot | Verify physical recovery and Android return | User interaction and restore package required |
+
+## Installation-preparation continuation
+
+The first Bluetooth candidate in this table was superseded by a separate
+`bluez-verity` build. Its config and boot-package hashes are recorded in
+[`research/boot-package-validation-2026-10-27.md`](boot-package-validation-2026-10-27.md).
+This corrects the dm-verity comparison but does not change the live capability
+rows: the phone still has no Linux HCI device, and no candidate has been
+boot-tested.

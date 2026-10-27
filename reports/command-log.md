@@ -110,3 +110,32 @@ the vendor ELFs and firmware image remain private.
 | Live versus candidate config comparison | Exit 0; live `CONFIG_DM_VERITY=y`, candidate `CONFIG_DM_VERITY` unset; USB/debug/static-ring differences recorded |
 | Recovery contents | Static TWRP ramdisk observed; recovery boot and Download Mode USB recognition not attempted |
 | Host cache cleanup | Removed only disposable pip cache after root filesystem reached 100%; project evidence, firmware, toolchains and backup copies were retained |
+
+## 2026-10-27 durability, firmware and compatibility continuation
+
+| Command or check | Result / exit code |
+|---|---|
+| Persistent rollback copy | Exit 0; four images copied from `/dev/shm` to ignored `backups/private-20261027` with directory 0700 and image/manifest 0600 |
+| Persistent digest verification | Exit 0; sorted SHA-256 digest sets for volatile and persistent image copies matched |
+| DTB/DTBO path investigation | Exit 0; distinct `/dev/block/mmcblk0p14` and `mmcblk0p15`, 8 MiB each, both byte-for-byte zero-filled |
+| Serial-pinned identity/CSC check | Exit 0; SM-M305F / m30lte / m30ltedd, INS, `M305FDDS8CVB2`, official CSC `M305FODM8CUI1`, bootloader property `M305FDDS8CVB2` |
+| Samsung FUS metadata query | Exit 0; official `samloader` 2.2.0 returned `M305FDDS8CVB2/M305FODM8CUI1/M305FDDS8CVB2/M305FDDS8CVB2` |
+| Stock package acquisition | Not completed; exact package identified, but AP is listed at 2.79 GB and no durable storage is available |
+| DTBH/FDT structural comparison | Exit 0; four live/candidate FDT blobs decoded with `dtc`; board and reserved-memory layout aligned, clock/regulator/fstab value differences recorded |
+| Corrected `bluez-verity` kernel build | Exit 0; complete family-tree build with `CONFIG_DM_VERITY=y`, `CONFIG_SCSC_BT_BLUEZ=y`, `CONFIG_USB_OTG=n` and SCSC debug/static-ring options unset; build log retained in ignored tmpfs |
+| Corrected boot-package round-trip | Exit 0; 33,554,432-byte padded package SHA-256 `988749cf794048d3443475dc7398df3f63a53e2ee0b2a083616e1c7148c6cd41`; unpacked kernel/DTB/ramdisk hashes matched inputs |
+
+## 2026-10-27 persistent package and mode checks
+
+| Command or check | Result / exit code |
+|---|---|
+| User-selected A–D cleanup | Exit 0; Burp update cache, old executable backup, Trash and unrelated scratch directory removed; free root space rose from about 1.2 to 3.3 GiB; M30 backups retained |
+| `samloader download` exact INS/FUS tuple to ignored persistent backup path | Exit 0; archive SHA-256 `b8090882a4564b5836ffdb38ae936c5412fe8325977e70a299925ce546806d6b` |
+| `scripts/inspect_stock_zip.py` | Exit 0; five ZIP CRCs and five embedded TAR MD5 checks passed; AP boot artifact extracted only |
+| Stock/live BOOT and four DTBH comparisons | Exit 0; four kernel bytes differ (`skip_initramfs`/`want_initramfs`); decoded DTBH property differences limited to fstab verify flags |
+| `samloader detect --json` in user-entered Download Mode | Exit 0; recognized SM-M305F; private serial omitted |
+| `samloader dump-pit --no-reboot` | Exit 0; 8,192-byte PIT parsed; no flash or restore |
+| Android return check | Exit 0; original build/kernel, SELinux enforcing, Bluetooth on |
+| TWRP screen and return | User observed TWRP after button sequence; Reboot → System returned ADB to original build/kernel, SELinux enforcing and Bluetooth on; recovery ADB/restore not tested |
+| Post-recovery phone backup rehash | Exit 0; BOOT/DTB/DTBO/RECOVERY phone copies retained their manifest SHA-256 values |
+| `python3 -m unittest discover -s tests -p 'test_stock_zip.py' -v` | Exit 0; synthetic metadata-footer and corruption cases passed |

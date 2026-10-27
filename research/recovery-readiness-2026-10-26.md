@@ -70,3 +70,39 @@ recovery boot or Download Mode USB session was performed. The installation
 decision remains blocked by the exact source/ABI, dm-verity/configuration,
 durable backup, and restore-procedure gates documented in
 [`research/readiness-gates-2026-10-27.md`](readiness-gates-2026-10-27.md).
+
+## 2026-10-27 durability and package continuation
+
+The four rollback images were copied from volatile `/dev/shm` to the ignored
+persistent project path `backups/private-20261027/` with restrictive
+permissions. Independent digest-set comparison returned exit 0. The phone
+copies remain in the user-data backup directory. This is one persistent host
+copy plus one phone copy, not independent physical redundancy; no external
+storage was mounted.
+
+The exact installed build and CSC were re-read as `M305FDDS8CVB2`, `INS`, and
+`M305FODM8CUI1`. Samsung FUS metadata was queried with the pinned official
+`samloader-rs` 2.2.0 binary and returned the matching revision-8 tuple. The
+corresponding AP/BL/CP/CSC/HOME_CSC names are known, but the multi-gigabyte AP
+was not downloaded because the host has no durable space. No restore package
+is therefore available for offline comparison or a restore procedure.
+
+The corrected `bluez-verity` kernel candidate restores the observed dm-verity
+and USB/debug configuration, and its boot package was parsed successfully.
+It still uses the public family source and family DTBH, has not been signed by
+Samsung tooling, and has not been booted. A recovery screen and Download Mode
+USB session remain untested. No physical mode transition was attempted in
+this phase.
+
+## Final 2026-10-27 mode-access update
+
+The preceding text records earlier checkpoints. Later on 2026-10-27, the
+exact INS firmware package was downloaded from Samsung FUS to ignored
+persistent storage and all five component checksums passed. The user entered
+Download Mode; samloader identified SM-M305F and read the PIT. The user also
+booted the TWRP screen, then returned to Android. ADB confirmed the original
+build/kernel, SELinux enforcing and Bluetooth enabled after each return.
+The [current gate table](readiness-gates-2026-10-27.md) and [recovery access
+report](recovery-access-2026-10-27.md) supersede earlier statements that no
+package or mode session was available. No restore was executed, and no
+independent backup storage was added.

@@ -87,6 +87,34 @@ verification rules are device and Android-version specific ([AOSP boot image
 headers](https://source.android.com/docs/core/architecture/bootloader/boot-image-header),
 [AOSP DTB images](https://source.android.com/docs/core/architecture/bootloader/dtb-images)).
 
+## Corrected candidate package
+
+The first candidate described above was built with the family's default
+configuration and intentionally remains in the record as a historical
+comparison. It disabled the live handset's dm-verity symbols and enabled
+unrelated USB/debug options. A separate `bluez-verity` build was produced
+after restoring the observed verity, USB-role and SCSC-debug choices. It used
+the same stock metadata scaffold and the original Magisk ramdisk; no phone
+partition was touched.
+
+| Check | Corrected result |
+|---|---|
+| Candidate `Image` | SHA-256 `a68e3eddfcfb90dc231a2eb8c97dda1a694d6b2e807bf0bdab417cd8063b377e` |
+| Candidate `dtb.img` | SHA-256 `acb171e3ba68dbfbdad7ef51cb52aa8b0da85ead138e1c0f68b42c0a159f2487` |
+| `.config` | SHA-256 `0e39e99395ba31cdfa58ddc52fcfa676fb9ebc500624d4fdcacfeefc22e62c29` |
+| Padded package | 33,554,432 bytes; SHA-256 `988749cf794048d3443475dc7398df3f63a53e2ee0b2a083616e1c7148c6cd41` |
+| Unpadded package | 22,908,944 bytes; SHA-256 `f6b4e2efe0050ac7de825f01d1db73503ddc28ecf8be0308accba38f44c22d8e` |
+| Re-parsed kernel/DTB | Extracted kernel and DTB hashes match the two inputs above |
+| Re-parsed ramdisk | SHA-256 `f5e345b1e350fd445050118e30c3aab1b83c669e79f6630bb3281fe3bd6b9dcf`; unchanged from the live package extraction |
+
+The corrected config has `CONFIG_DM_VERITY=y`, the Android at-most-once
+default enabled, `CONFIG_USB_OTG` unset, and SCSC debug/static-ring options
+unset while retaining `CONFIG_BT=y` and `CONFIG_SCSC_BT_BLUEZ=y`. This narrows
+one configuration mismatch; it does not resolve the family-source ABI, family
+DTB value differences, Samsung signing/verification requirements or the
+unobserved controller initialization path. The corrected package is still an
+offline artifact and has not been booted or installed.
+
 ## Reproduction commands
 
 The validation used the Android Image Kitchen copy shipped in the pinned
@@ -109,6 +137,10 @@ cp /dev/shm/m30-bluez-artifacts/dtb.img split_img/stock-boot.img-dt
 sha256sum image-new.img
 ./bin/linux/x86_64/unpackbootimg -i image-new.img -o candidate-unpack
 ```
+
+For the corrected candidate, use the `bluez-verity` outputs and record both
+the padded and unpadded hashes above. The command is a package round-trip
+check only; it is not a flash procedure.
 
 The unchanged round-trip must match the source BOOT hash before the candidate
 substitution is considered meaningful. The candidate output must then be
