@@ -88,8 +88,19 @@ Evidence SHA-256 respectively:
 `90fc045f16dd41e633cd8689c3042236e173c9846d9a6c80970ac8c8808e79ab`;
 `28202ab4073f71bb84eff63417c9cd15545fc3c7d747f85d5d0ba18b13ffb1a9`.
 
-Android post-restoration RF/fixture validation is pending phone unlock. ON and
-descriptor ownership alone do not establish a working Android exchange.
+After phone unlock, the existing app started its 30-second bounded BLE scan at
+13:25:40 IST. The owned laptop registered the project's LAB GATT advertisement;
+the phone received it at 13:25:45, RSSI -56 dBm. This independently correlates a
+laptop advertisement with a phone-side callback after restoration. It is not a
+packet-rate measurement or validation of Linux scanning. Private evidence:
+`android-restore-lab-fixture-2026-10-28.txt` and
+`android-restore-scan-2026-10-28.txt`.
+
+The phone stopped at its 30-second deadline (13:26:10 IST), with four records.
+The 25-second laptop fixture exited 0 and logged `LAB fixture stopped`; host
+discoverability, pairability and discovery remained off. Evidence SHA-256:
+scan `f64cacc141637ef44b99f20fb1ed7c08b1beda89a7760a9237e9ff3881535b3b`;
+fixture `0a1f7c6e5d389c32165dfdd5f054519766be9da72ef4db4ff832f9895564cd81`.
 
 ## Registration caveat and remaining work
 
@@ -103,5 +114,8 @@ comment has been corrected; no kernel binary was rebuilt for that comment.
 
 No Linux L2CAP/RFCOMM fixture exchange, third-party disconnect, or APK Linux
 backend integration was attempted here. The APK and its signing identity remain
-unchanged. Next validation: Android bounded BLE scan against the owned fixture
-after restoration, followed by a supervised repeatability plan.
+unchanged. The app's old unprivileged Linux readiness text is now stale; do not
+interpret it as a fresh root controller probe. Next validation: repeat the
+supervised transition with an ordinary Linux BLE scan of the owned fixture,
+then verify Android reception again. Review automatic initialization ownership
+before expanding beyond supervised testing.

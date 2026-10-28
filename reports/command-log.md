@@ -209,3 +209,12 @@ ENODEV diagnosis and passive-registration claim are withdrawn as documented in
 Some truncated `dumpsys | head` queries logged a broken-pipe notice after the
 requested status lines; these were not interpreted as full dumpsys validation.
 No additional cleanup, partition write or APK change occurred in this turn.
+
+### 13:25–13:26 IST — Android restoration reception check
+
+After the user unlocked the phone, `host/ui_tap.py` selected the existing app's
+bounded scan. `host/gatt_fixture.py --seconds 25` registered the LAB advertisement
+on the owned laptop. Phone callback at 13:25:45 reported the fixture at -56 dBm.
+Phone scan stopped at the 30-second deadline with four records; host fixture
+exited 0 after unregistering. Host discoverable/pairable/discovering states were
+all off afterward. Private evidence hashes are in the HCI helper result report.
