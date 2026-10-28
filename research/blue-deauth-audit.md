@@ -60,9 +60,25 @@ the operation to the laptop.
 | Is the target a required protocol peer? | Assumed | Baseline request and target metadata are recorded | Named target, Classic capability, and baseline response |
 | Is work bounded? | No | Count, pace, duration, and per-call deadlines | JSON run reaches `completed`, `deadline`, or `stopped` |
 | Did the target's existing link disconnect? | Never measured | Explicitly `not_measured` until independent observation | Target-side connection log before/during/after |
-| Can it run on this phone? | No: no Linux HCI | No: disabled phone status; laptop only | Live `/proc/config.gz`, no internal `hci0` |
+| Can it run on this phone? | Not on the original Android-only image | Supervised phone path now runs bounded HCI/LE/L2CAP operations; RFCOMM is unavailable until the candidate is installed | Live run IDs and `/proc/net/protocols`; no concurrent ownership |
 
-No active run is claimed in this audit because the user has not supplied the
-target model/firmware and the device's current connection. A named target is
-required for an ethical, interpretable baseline → bounded test → recovery
-measurement.
+## Phone-side follow-up
+
+The corrected research kernel subsequently exposed a supervised Linux `hci0`
+through the internal SCSC controller. A bounded phone-side LE scan received
+the project's LAB advertisement, and one raw L2CAP echo request received a
+valid response from the cooperating laptop. These are ordinary local protocol
+results; neither is a disconnect or deauthentication observation.
+
+The first phone-side RFCOMM attempt returned `EPROTONOSUPPORT` before the
+laptop fixture saw a connection. The runtime configuration contained
+`CONFIG_BT_RFCOMM=y`, but the exact family source revision used for the
+candidate comments out the `net/bluetooth/rfcomm/` Makefile entry. The project
+now carries a one-line source correction and an offline build that links the
+RFCOMM symbols. That candidate has not been flashed or live-tested.
+
+Evidence and run IDs are in
+[`research/linux-hci-experiments-2026-10-28.md`](linux-hci-experiments-2026-10-28.md).
+No third-party link interruption was observed. A named, explicitly owned
+fixture and independent target-side connection evidence remain required before
+using the word “deauth” for any future test.

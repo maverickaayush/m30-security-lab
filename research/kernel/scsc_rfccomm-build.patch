@@ -1,0 +1,8 @@
+diff --git a/net/bluetooth/Makefile b/net/bluetooth/Makefile
+--- a/net/bluetooth/Makefile
++++ b/net/bluetooth/Makefile
+@@ -5,3 +5,3 @@
+ obj-$(CONFIG_BT)	+= bluetooth.o
+-#obj-$(CONFIG_BT_RFCOMM)	+= rfcomm/
++obj-$(CONFIG_BT_RFCOMM)	+= rfcomm/
+ #obj-$(CONFIG_BT_BNEP)	+= bnep/

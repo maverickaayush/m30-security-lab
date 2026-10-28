@@ -1,6 +1,6 @@
 # Bluetooth ownership and Linux access paths on this M30
 
-Checked 2026-10-26. Source comparisons use M30-family tree
+Checked 2026-10-26; live-path addendum 2026-10-28. Source comparisons use M30-family tree
 [`095206579f69121278ed1dd5fd0d7975c0705c6a`](https://github.com/akhil1999/android_kernel_samsung_m30lte/tree/095206579f69121278ed1dd5fd0d7975c0705c6a),
 not an established exact match for `M305FDDS8CVB2`.
 
@@ -84,3 +84,21 @@ research radio solve different tasks. NetHunter's
 adds packaged tools; it cannot supply missing phone kernel support or RF
 hardware. There is no demonstrated need to install it for the working native
 app and laptop fixture.
+
+## 2026-10-28 live-path addendum
+
+The installed corrected research kernel now has `CONFIG_BT=y` and
+`CONFIG_SCSC_BT_BLUEZ=y`. After the Android HAL is stopped and its H4
+descriptor is verified closed, the project supervisor acquires the SCSC-backed
+`hci0`; a phone-side raw HCI command and a bounded LE scan both succeeded.
+The supervisor then brings Linux down and restores the Android HAL, which
+reopens the H4 node and returns Bluetooth to ON. This is a supervised,
+exclusive path, not concurrent ownership or a userspace-only bridge.
+
+The live LE scan found the controlled LAB advertisement and a raw L2CAP echo
+request received a valid response from the cooperating laptop. RFCOMM returned
+`EPROTONOSUPPORT`: the family build's effective config enables RFCOMM but its
+`net/bluetooth/Makefile` omits the RFCOMM subdirectory. A one-line correction
+and complete offline candidate build are recorded in
+[`research/linux-hci-experiments-2026-10-28.md`](linux-hci-experiments-2026-10-28.md).
+That candidate is not installed.

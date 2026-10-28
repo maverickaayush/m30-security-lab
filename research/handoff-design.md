@@ -1,7 +1,12 @@
 # Exclusive Android-to-Linux controller handoff design
 
-Status: **offline model only** (2026-10-26). The installed kernel has no
-Linux HCI device, so the research-owner state cannot be entered on the phone.
+Status: **offline model plus supervised live path** (2026-10-28). The
+corrected installed research kernel can enter the research-owner state only
+after the Android HAL is stopped and its SCSC H4 descriptor is verified closed.
+The first live HCI command, bounded LE scan, and Android restoration have
+passed; RFCOMM remains unavailable in this image because its protocol object
+was omitted from the family Makefile. The newer RFCOMM-enabled candidate is
+offline-only.
 The state machine is implemented and exercised by
 `scripts/handoff_model.py` and `tests/test_handoff_model.py`; it never sends
 ADB commands or touches Bluetooth.

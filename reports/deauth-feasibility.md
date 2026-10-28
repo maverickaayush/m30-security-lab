@@ -10,7 +10,18 @@ The term “Bluetooth deauth” is too broad for a single command or capability.
 | Vulnerability-based disruption | Unknown until a specific owned target, firmware/version, advisory and prerequisites are identified. No exploit was selected or run. |
 | RF interference or jamming | In principle, sufficient interference can degrade a radio link, including links between other devices. It is not a universal Bluetooth disconnect command, cannot guarantee every link in an area will drop, and cannot be delivered as a controlled feature of the observed M30 Android Bluetooth API. No interference generator was implemented or tested. A separate, instrumented RF setup would be required to establish an effect on the owned earbud link. |
 
-The handset's `CONFIG_BT` is unset and `CONFIG_SCSC_BT_BLUEZ` is off. Its observed route is Android framework → vendor HAL → `/dev/scsc_h4_0` → SCSC controller. Root alone does not add an AF_BLUETOOTH socket or a Linux HCI controller. The project therefore does not supply a fabricated “deauth” command. The [Bluetooth SIG HCI specification](https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core_v6.3/out/en/host-controller-interface/host-controller-interface-functional-specification.html) defines HCI Disconnect with a local connection handle; [Android BluetoothGatt.disconnect()](https://developer.android.com/reference/android/bluetooth/BluetoothGatt#disconnect()) applies to the app's GATT link. The [M30-family source Kconfig](https://github.com/akhil1999/android_kernel_samsung_m30lte/blob/095206579f69121278ed1dd5fd0d7975c0705c6a/drivers/misc/samsung/scsc_bt/Kconfig) describes the optional BlueZ path. The running config, rather than that repository alone, establishes this handset's disabled path.
+The original Android-only image had `CONFIG_BT` unset and
+`CONFIG_SCSC_BT_BLUEZ` off. The corrected research kernel now enables the
+Linux Bluetooth core and SCSC bridge, but access is deliberately supervised:
+the Android HAL must release `/dev/scsc_h4_0` before the phone-side HCI helper
+acquires `hci0`. Root alone did not create that path. The [Bluetooth SIG HCI
+specification](https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core_v6.3/out/en/host-controller-interface/host-controller-interface-functional-specification.html)
+defines HCI Disconnect with a local connection handle;
+[Android BluetoothGatt.disconnect()](https://developer.android.com/reference/android/bluetooth/BluetoothGatt#disconnect())
+applies to the app's GATT link. The [M30-family source
+Kconfig](https://github.com/akhil1999/android_kernel_samsung_m30lte/blob/095206579f69121278ed1dd5fd0d7975c0705c6a/drivers/misc/samsung/scsc_bt/Kconfig)
+describes the optional BlueZ path. The live result, not that repository alone,
+establishes the supervised access boundary.
 
 Ownership of all nearby devices permits controlled testing but does not change the controller's command semantics. The earbud/host models and firmware were not supplied, so no vulnerability-specific claim can be made. Even with an external raw link-layer radio or sniffer, disrupting an unrelated connection requires a demonstrated target-specific mechanism and verification. A generic “works on every Bluetooth connection” result is unsupported.
 
@@ -82,3 +93,23 @@ real laptop `hci0` dry-run completed without sending a target request. No
 target-specific run was performed because the target model/firmware and its
 existing connection were not identified. The backend therefore establishes a
 repeatable stress-test harness, not a general deauthentication capability.
+
+## 2026-10-28 phone-side update
+
+The corrected installed research kernel now exposes a supervised SCSC-backed
+Linux `hci0` after the Android HAL releases the H4 node. A bounded phone-side
+LE scan received the controlled LAB advertisement and one raw L2CAP echo
+request received a valid response from the cooperating laptop. Android
+ownership was restored after each run. This expands the ordinary controller
+access evidence; it does not change the disruption conclusion.
+
+The first phone-side RFCOMM attempt returned `EPROTONOSUPPORT` before the
+fixture saw a connection. The family source had `CONFIG_BT_RFCOMM=y` but
+omitted `net/bluetooth/rfcomm/` from its Makefile. An offline one-line fix
+compiled the RFCOMM objects, but that candidate has not been installed or
+tested. Full run IDs and private evidence locations are in
+[`research/linux-hci-experiments-2026-10-28.md`](../research/linux-hci-experiments-2026-10-28.md).
+
+No existing connection owned by another controller was interrupted. No
+third-party disconnect, RF interference, or universal deauthentication
+mechanism has been established.

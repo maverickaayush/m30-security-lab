@@ -5,6 +5,9 @@ Adapted to the project's two UUIDs from BlueZ's public D-Bus examples.
 No pairing, filesystem writes, or non-lab advertisement data.
 """
 import argparse
+import json
+import time
+import signal
 import dbus
 import dbus.service
 import dbus.mainloop.glib
@@ -19,6 +22,11 @@ ADV = "org.bluez.LEAdvertisement1"
 SERVICE_UUID = "7f5f42d6-4659-4c15-9fe7-7de7a7033b01"
 CHAR_UUID = "7f5f42d6-4659-4c15-9fe7-7de7a7033b02"
 BASE = "/org/cattail/m30lab"
+RUN_ID = "manual"
+
+def event(name, **fields):
+    print(json.dumps({"run_id": RUN_ID, "event": name, "utc_ms": time.time_ns() // 1000000,
+                      "mono_ns": time.monotonic_ns(), **fields}), flush=True)
 
 
 class Properties(dbus.service.Object):
@@ -115,9 +123,12 @@ class Advertisement(Properties):
 
 
 def main():
+    global RUN_ID
     parser = argparse.ArgumentParser()
     parser.add_argument("--seconds", type=int, default=90)
+    parser.add_argument("--run-id", default="manual")
     args = parser.parse_args()
+    RUN_ID = args.run_id
     seconds = max(10, min(args.seconds, 120))
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     bus = dbus.SystemBus()
@@ -132,13 +143,15 @@ def main():
     manager = dbus.Interface(bus.get_object(BLUEZ, adapter_path), "org.bluez.GattManager1")
     advertiser = dbus.Interface(bus.get_object(BLUEZ, adapter_path), "org.bluez.LEAdvertisingManager1")
     loop = GLib.MainLoop()
+    signal.signal(signal.SIGINT, lambda *_: loop.quit())
+    signal.signal(signal.SIGTERM, lambda *_: loop.quit())
     def fail(error):
         print("Registration failed:", error, flush=True)
         loop.quit()
     def registered(_=None):
-        print("GATT registered; starting LAB advertisement", flush=True)
+        event("gatt_registered")
         advertiser.RegisterAdvertisement(dbus.ObjectPath(BASE + "/advertisement0"), {},
-            reply_handler=lambda: print("LAB advertisement registered", flush=True), error_handler=fail)
+            reply_handler=lambda: event("advertisement_registered", service_uuid=SERVICE_UUID), error_handler=fail)
     manager.RegisterApplication(dbus.ObjectPath(BASE), {}, reply_handler=registered, error_handler=fail)
     GLib.timeout_add_seconds(seconds, lambda: (loop.quit(), False)[1])
     try:
@@ -148,7 +161,7 @@ def main():
         except dbus.DBusException: pass
         try: manager.UnregisterApplication(dbus.ObjectPath(BASE))
         except dbus.DBusException: pass
-        print("LAB fixture stopped", flush=True)
+        event("fixture_stopped")
 
 
 if __name__ == "__main__":

@@ -45,9 +45,14 @@ Open the app, grant its requested permission, refresh capabilities, and select a
 **Bluetooth connection tests** now contains a phone-side Android RFCOMM backend.
 Select one owned Classic device, request its SDP UUIDs, choose a returned
 service UUID, and set a bounded request count and duration. The screen also
-shows why Linux L2CAP echo cannot run on the installed kernel. It does not
-call the laptop backend or claim that opening Samsung's H4 node creates a
-Linux `hci0`. No Classic target test was run in the current continuation.
+shows why Linux L2CAP echo cannot run while Android owns the controller. A
+separate rooted supervisor can now stop the Android HAL, acquire the installed
+research kernel's SCSC-backed `hci0`, run one bounded operation, and restore
+Android ownership. The APK does not call that privileged helper or claim that
+Android and Linux can own the controller concurrently. Linux LE and L2CAP
+fixture results are recorded in [the phone-side HCI report](research/linux-hci-experiments-2026-10-28.md);
+RFCOMM remains blocked in the installed image because its protocol object was
+omitted from the family Makefile.
 See [mobile integration](reports/mobile-integration.md),
 [REA handoff trace](research/rea-handoff-followup.md),
 [offline bridge compile](research/kernel-bridge-build.md), and
@@ -88,8 +93,11 @@ and [proof-of-concept results](research/experiment-results.md). The read-only
 `smxf` image; copied firmware remains ignored under `evidence/`.
 
 The proposed internal HCI kernel config and source readiness checks are in
-[kernel HCI readiness](research/kernel-hci-readiness.md). They are offline
-research artifacts; no kernel image has been installed on the phone.
+[kernel HCI readiness](research/kernel-hci-readiness.md). The corrected
+auto-registration/ABOX research kernel is installed and has passed the
+bounded HCI command, LE scan, L2CAP echo and ownership-restoration checks
+described in [the phone-side HCI report](research/linux-hci-experiments-2026-10-28.md).
+The newer RFCOMM-enabled candidate is offline-only and has not been installed.
 
 The 2026-10-27 minimal-kernel continuation classified [all 46 earlier config
 differences](research/config-difference-classification-2026-10-27.md),

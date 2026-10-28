@@ -13,6 +13,7 @@ set -euo pipefail
 #   ABOX_IO_PATCH=1 ... scripts/build_m30_kernel.sh bluez-minimal
 #   SCSC_BLUEZ_AUTO_REGISTER=1 ... scripts/build_m30_kernel.sh bluez-minimal
 #   SCSC_BLUEZ_KEEP_SERVICE=1 ... scripts/build_m30_kernel.sh bluez-minimal
+#   SCSC_BT_RFCOMM=1 ... scripts/build_m30_kernel.sh bluez-minimal
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 SRC=${SRC:?set SRC to the checked-out kernel source}
@@ -23,6 +24,7 @@ EXPECTED_COMMIT=095206579f69121278ed1dd5fd0d7975c0705c6a
 ABOX_IO_PATCH=${ABOX_IO_PATCH:-0}
 SCSC_BLUEZ_AUTO_REGISTER=${SCSC_BLUEZ_AUTO_REGISTER:-0}
 SCSC_BLUEZ_KEEP_SERVICE=${SCSC_BLUEZ_KEEP_SERVICE:-0}
+SCSC_BT_RFCOMM=${SCSC_BT_RFCOMM:-0}
 
 case "$MODE" in
   baseline|bluez|bluez-verity|bluez-minimal) ;;
@@ -43,6 +45,9 @@ HOSTCFLAGS=${HOSTCFLAGS:-'-Wall -Wmissing-prototypes -Wstrict-prototypes -O2 -fo
 KCFLAGS=${KCFLAGS:-'-Wno-error -Wno-error=enum-int-mismatch -Wno-error=restrict -Wno-error=stringop-overflow -Wno-error=array-bounds -Wno-error=array-compare -Wno-error=address-of-packed-member -Wno-error=misleading-indentation -Wno-error=zero-length-bounds -Wno-error=dangling-pointer -D__ANDROID__'}
 
 cleanup_source() {
+  if [ "$SCSC_BT_RFCOMM" = 1 ]; then
+    git -C "$SRC" apply --reverse "$ROOT/research/kernel/scsc_rfccomm-build.patch" 2>/dev/null || true
+  fi
   if [ "$SCSC_BLUEZ_KEEP_SERVICE" = 1 ]; then
     git -C "$SRC" apply --reverse "$ROOT/research/kernel/scsc_bt-keep-service.patch" 2>/dev/null || true
   fi
@@ -90,6 +95,11 @@ fi
 if [ "$SCSC_BLUEZ_KEEP_SERVICE" = 1 ]; then
   test "$MODE" != baseline
   git -C "$SRC" apply "$ROOT/research/kernel/scsc_bt-keep-service.patch"
+fi
+
+if [ "$SCSC_BT_RFCOMM" = 1 ]; then
+  test "$MODE" != baseline
+  git -C "$SRC" apply "$ROOT/research/kernel/scsc_rfccomm-build.patch"
 fi
 
 make -C "$SRC" O="$OUT" ARCH=arm64 ANDROID_MAJOR_VERSION=q \
