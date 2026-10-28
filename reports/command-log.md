@@ -155,3 +155,57 @@ the vendor ELFs and firmware image remain private.
 
 See research/abox-panic-and-io-fix-2026-10-27.md for source evidence,
 remaining Wi-Fi warnings and the inaccurate legacy baseline filename.
+
+## 2026-10-28 HCI registration candidate preparation
+
+| Command or check | Result |
+|---|---|
+| Running serial-pinned inventory | Exit 0; SM-M305F / Android 10 / M305FDDS8CVB2; corrected ABOX kernel still active; SELinux Enforcing; Android Bluetooth service running |
+| Targeted HAL ownership read | Exit 0; vendor Bluetooth service retained a descriptor for `/dev/scsc_h4_0`; no Linux `hci0` or rfkill class present |
+| Running effective configuration | Exit 0; `CONFIG_BT`, BR/EDR, LE, RFCOMM, `CONFIG_SCSC_BT`, `CONFIG_SCSC_BT_BLUEZ` and `CONFIG_DM_VERITY` enabled |
+| `scsc_bt/power_control` registration-only write | Denied by enforced device policy; no transport open, permission change or SELinux change attempted |
+| Family source auto-registration patch check | Exit 0; `scsc_bluez-auto-register.patch` applies to revision `095206579f69121278ed1dd5fd0d7975c0705c6a`; schedules existing registration worker only |
+| Incremental `bluez-minimal` build with `ABOX_IO_PATCH=1 SCSC_BLUEZ_AUTO_REGISTER=1` | Exit 0; raw Image SHA-256 `5427fa99c2edb8eb34986fea4268dbca36e4e45edd831ca72dd6e3bd0267d985`; compiler warnings retained |
+| First candidate package check in `/dev/shm` | Rejected; tmpfs quota exhausted and extracted verification file was incomplete; no device write |
+| Persistent candidate package round-trip | Exit 0; package SHA-256 `f41bb7078526c33cf125ac0a3e5bd99ab4771464b19c3ed015a6bdfb070e1a52`; extracted kernel/DTB/ramdisk matched; no device write |
+
+## 2026-10-28 — explicitly approved cleanup
+
+User selected items 2, 5, 6, 7 and conditionally item 1. Metadata inspection, Docker per-image removal (22 images, no force/prune), protected final-artifact copy/hash verification, and exact temporary-tree removal completed with exit code 0. See `reports/storage-cleanup-2026-10-28.md`; full private action logs are in ignored `evidence/cleanup-20261028-approved-2-5-6-7/`. Original BOOT and installed registration-candidate package hashes match their expected values.
+
+## 2026-10-28 SCSC service-retention candidate
+
+| Command or check | Result |
+|---|---|
+| Source reset and patch checks | Exit 0; temporary family tree returned to revision `095206579f69121278ed1dd5fd0d7975c0705c6a`; compatibility, SKB-lifetime, auto-register, keep-service and ABOX patches applied by the isolated build script |
+| Full candidate compile/link | Kernel compilation and link reached `vmlinux`, `Image`, DTB output, `System.map`, module and effective `.config`; wrapper stopped only at `Image.gz` because `/dev/shm` per-user quota was exhausted |
+| Completed output recovery | Exit 0; stopped-build link temporaries removed by explicit path and `Image.gz` created with `gzip -n -9`; raw Image SHA-256 `500225061643caefbca87432da62780aa72e8b3bad1cb257a3a7b9ae89e3a2c9` |
+| Magisk kernel preparation | Exit 0; four-byte `skip_initramfs` → `want_initramfs` copy SHA-256 `81246707e8bdaa4ae991856d8cdd6e410e6abc3f7c614aaf5916f370903dffb5` |
+| Candidate package round-trip | Exit 0; 33,554,432-byte BOOT package SHA-256 `f0951a16f3e243866ad111533f28ead262be2baff81bb5b409bbfa6d175f27a2`; live DTB, Magisk ramdisk and patched kernel re-extracted and matched |
+| Phone HCI probe rebuild | Exit 0 with isolated loader path; helper SHA-256 `edccc39c409ccbcb7944d48fe981af3db67f2aeeb5767ea24e5354d3cc061779`; accepts `HCIDEVUP` `EALREADY` and still sends only Read Local Version |
+| Device write | Not yet performed; waiting for user-entered Download Mode, then detection/PIT validation |
+
+## 2026-10-28 13:13–13:24 IST — helper correction and actual HCI exchange
+
+The service-retention installation was cancelled before any write. Detection
+in Download Mode succeeded; user returned the phone to Android. The previous
+ENODEV diagnosis and passive-registration claim are withdrawn as documented in
+`research/hci-helper-abi-and-live-result-2026-10-28.md`.
+
+| Check / bounded command | Exit/result |
+|---|---|
+| Existing rollback and proposed BOOT SHA-256 | Matched; neither image written this turn |
+| Targeted ADB inventory | 0; original installed research kernel, enforcing, HAL running, hci0 present |
+| Broad root fd walk | Host timeout 124; replaced with targeted HAL fd check, no device mutation |
+| `cc -Wall -Wextra -Werror -O2 tests/test_phone_hci_probe.c ...` | 0; 12 mocked cases pass |
+| `build_phone_hci_probe.sh` with isolated AArch64 GCC 15.2.0 | 0; static binary SHA-256 `2a44c4f6b8c301394fa4c15de960c259a1584a7cf985bfab9b4ed7a1e576bb95` |
+| Push helper, chmod 700, `svc bluetooth disable` | 0; framework disabled but BLE_ON persisted |
+| `stop vendor.bluetooth-1-0`; state/fd check | Service stopped; fd grep exit 1 (no SCSC H4 descriptor found) |
+| Recheck HAL stopped/no H4 fd; device `timeout 25` corrected helper under host `timeout 35s` | 0; valid 0x1001 Command Complete, controller down |
+| `start vendor.bluetooth-1-0`; `svc bluetooth enable` | 0; HAL running, H4 descriptor reacquired, framework ON, enforcing |
+| Launch app and UI inspection | 0; lock screen prevented post-restoration scan, user asked to unlock |
+| `gh repo view ... --json isPrivate,defaultBranchRef` | 0; private=true, main |
+
+Some truncated `dumpsys | head` queries logged a broken-pipe notice after the
+requested status lines; these were not interpreted as full dumpsys validation.
+No additional cleanup, partition write or APK change occurred in this turn.

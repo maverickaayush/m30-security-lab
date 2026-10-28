@@ -1,0 +1,18 @@
+diff --git a/drivers/misc/samsung/scsc_bt/scsc_bluez.c b/drivers/misc/samsung/scsc_bt/scsc_bluez.c
+index 1c58f95c..b4da44d2 100755
+--- a/drivers/misc/samsung/scsc_bt/scsc_bluez.c
++++ b/drivers/misc/samsung/scsc_bt/scsc_bluez.c
+@@ -220,6 +220,13 @@ void slsi_bt_notify_probe(struct device *dev,
+ 	dev_ref         = dev;
+ 
+ 	SCSC_TAG_INFO(BT_COMMON, "SLSI BT BlueZ probe\n");
++
++	/* Register the Linux HCI device after the SCSC service is available.
++	 * WARNING: hci_register_dev() queues hci_power_on and can open the
++	 * transport automatically. This experimental trigger does not establish
++	 * safe boot-time ownership arbitration with Android's HAL. */
++	INIT_WORK(&open_worker, slsi_bt_open_worker);
++	schedule_work(&open_worker);
+ }
+ 
+ void slsi_bt_notify_remove(void)

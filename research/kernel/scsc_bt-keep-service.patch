@@ -1,0 +1,55 @@
+diff --git a/drivers/misc/samsung/scsc_bt/scsc_bt_module.c b/drivers/misc/samsung/scsc_bt/scsc_bt_module.c
+index ad765e49..1b56ea19 100755
+--- a/drivers/misc/samsung/scsc_bt/scsc_bt_module.c
++++ b/drivers/misc/samsung/scsc_bt/scsc_bt_module.c
+@@ -85,6 +85,16 @@ static u32 firmware_control;
+ static bool firmware_control_reset = true;
+ static u32 firmware_mxlog_filter;
+ static bool disable_service;
++#ifdef CONFIG_SCSC_BT_BLUEZ
++/*
++ * Keep the SCSC BT service context alive when the Android H4 client closes.
++ * This creates a controlled handoff window for the in-kernel BlueZ bridge:
++ * the next H4 client can reuse the probed service without requiring a second
++ * SCSC probe.  The default remains off so normal Android builds retain the
++ * stock close semantics.
++ */
++static bool bluez_keep_service;
++#endif
+ 
+ /* Audio */
+ static struct scsc_bt_audio_driver *audio_driver;
+@@ -121,6 +131,11 @@ MODULE_PARM_DESC(firmware_control_reset,
+ module_param(disable_service, bool, S_IRUGO | S_IWUSR);
+ MODULE_PARM_DESC(disable_service,
+ 		 "Disables service startup");
++#ifdef CONFIG_SCSC_BT_BLUEZ
++module_param(bluez_keep_service, bool, S_IRUGO | S_IWUSR);
++MODULE_PARM_DESC(bluez_keep_service,
++		 "Keep the probed SCSC BT service alive across H4 client handoff");
++#endif
+ 
+ /*
+  * Service event callbacks called from mx-core when things go wrong
+@@ -1091,8 +1106,19 @@ static int scsc_bt_h4_release(struct inode *inode, struct file *file)
+ 	mutex_lock(&bt_start_mutex);
+ 	wake_lock(&bt_service.service_wake_lock);
+ 	if (!bt_recovery_in_progress) {
+-		if (slsi_sm_bt_service_stop() == -EIO)
+-			goto recovery;
++		#ifdef CONFIG_SCSC_BT_BLUEZ
++		if (bluez_keep_service) {
++			/* Keep one service reference as the handoff reservation. */
++			if (atomic_read(&bt_service.service_users) > 1)
++				atomic_dec(&bt_service.service_users);
++			SCSC_TAG_INFO(BT_COMMON,
++				      "retaining SCSC service for BlueZ handoff\n");
++		} else
++		#endif
++		{
++			if (slsi_sm_bt_service_stop() == -EIO)
++				goto recovery;
++		}
+ 
+ 		/* Clear all control structures */
+ 		bt_service.read_offset = 0;
