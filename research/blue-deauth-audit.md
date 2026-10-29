@@ -79,6 +79,32 @@ RFCOMM symbols. That candidate has not been flashed or live-tested.
 
 Evidence and run IDs are in
 [`research/linux-hci-experiments-2026-10-28.md`](linux-hci-experiments-2026-10-28.md).
-No third-party link interruption was observed. A named, explicitly owned
-fixture and independent target-side connection evidence remain required before
-using the word “deauth” for any future test.
+At the time of the first phone-side experiment, no third-party link
+interruption had been observed. A named target and independent target-side
+connection evidence were still needed to assess any later disruption claim.
+
+## Instrumented 2026-10-29 follow-up and request-count interpretation
+
+The M30 subsequently completed two bounded 100-request/60-second L2CAP echo
+sequences against the user's owned Noise Air Buds Pro 4. The second run had an
+independent Nothing Phone (2a) HCI snoop covering the earbud's existing Classic
+link. The target answered all 100 requests; the Nothing controller recorded no
+disconnection event, and the user noticed no audio interruption. See
+[`reports/noise4-l2cap-instrumented-2026-10-29.md`](../reports/noise4-l2cap-instrumented-2026-10-29.md).
+This is a negative result at this workload, not a general resistance threshold.
+
+There is no supported universal request count at which L2CAP echo causes a
+disconnect. The original `blue-deauth` scripts provide no target-specific
+threshold or independent link-state measurement. The 2024 **BlueDoS** study
+reports that some tested OnePlus accessories disconnected on the L2CAP socket
+**connection before any ping payload was sent**, while tested BoAt devices
+behaved differently and resisted a single tester's connection attempts.
+Its device and protocol findings cannot be transferred to the Noise model or
+converted into a generic number of echo requests. Primary paper:
+https://www.scitepress.org/PublishedPapers/2024/128457/
+
+A separate 2026 Linux kernel patch discussion measured a pathological packed
+echo-request amplification case against an unpatched Linux target; its packet
+framing and target stack differ from this helper's one ordinary echo per
+socket against earbuds. It is not an applicable request-count threshold:
+https://www.spinics.net/lists/kernel/msg6218927.html

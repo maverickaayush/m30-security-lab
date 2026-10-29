@@ -1,6 +1,6 @@
 #!/system/bin/sh
 # Root-only, phone-local supervisor. No arbitrary program/command arguments.
-# RUN_ID SECONDS [normal|cancel|timeout] [target channel]. Failure leaves an explicit recovery
+# RUN_ID SECONDS MODE [target channel-or-request-count]. Failure leaves an explicit recovery
 # status; never restart Android after an unverified Linux down operation.
 set -u
 umask 077
@@ -12,13 +12,22 @@ channel=${5:-}
 case "$id" in ''|*[!a-zA-Z0-9_-]*) exit 2;; esac
 test "${#id}" -le 64 || exit 2
 case "$seconds" in ''|*[!0-9]*) exit 2;; esac
-test "$seconds" -ge 1 && test "$seconds" -le 20 || exit 2
-case "$test_mode" in normal|cancel|timeout|rfcomm|echo) ;; *) exit 2;; esac
-if [ "$test_mode" = rfcomm ] || [ "$test_mode" = echo ]; then
+test "$seconds" -ge 1 || exit 2
+case "$test_mode" in normal|cancel|timeout|rfcomm|echo|echo-seq) ;; *) exit 2;; esac
+if [ "$test_mode" = echo-seq ]; then
+    test "$seconds" -le 60 || exit 2
+else
+    test "$seconds" -le 20 || exit 2
+fi
+if [ "$test_mode" = rfcomm ] || [ "$test_mode" = echo ] || [ "$test_mode" = echo-seq ]; then
     case "$target" in [0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]) ;; *) exit 2;; esac
     if [ "$test_mode" = rfcomm ]; then
         case "$channel" in ''|*[!0-9]*) exit 2;; esac
         test "$channel" -ge 1 && test "$channel" -le 30 || exit 2
+    elif [ "$test_mode" = echo-seq ]; then
+        case "$channel" in ''|*[!0-9]*) exit 2;; esac
+        test "$channel" -ge 1 && test "$channel" -le 100 || exit 2
+        test "$((seconds * 1000 / channel))" -ge 600 || exit 2
     fi
 fi
 test "$(id -u)" = 0 || exit 2
@@ -69,7 +78,9 @@ if ls -l /proc/[0-9]*/fd/* 2>/dev/null | grep -q /dev/scsc_h4_0; then
     exit 1
 fi
 log android_released
-if [ "$test_mode" = rfcomm ] || [ "$test_mode" = echo ]; then
+if [ "$test_mode" = echo-seq ]; then
+    timeout -k 5 68 "$helper" hci0 "$test_mode" "$id" "$seconds" "$target" "$channel" &
+elif [ "$test_mode" = rfcomm ] || [ "$test_mode" = echo ]; then
     timeout -k 5 12 "$helper" hci0 "$test_mode" "$id" "$seconds" "$target" "$channel" &
 elif [ "$test_mode" = timeout ]; then
     timeout -k 5 3 "$helper" hci0 scan "$id" "$seconds" &

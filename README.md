@@ -2,17 +2,50 @@
 
 Project for an owned Samsung SM-M305F (`m30lte`) running Android 10. The app uses Android Bluetooth APIs and never transmits on install or boot. Keep all RF tests inside the isolated lab; advertisements are broadcasts and cannot be contained by an address allowlist.
 
+## Scope and current status
+
+This repository covers the Android lab app, cooperating Linux fixtures,
+Samsung SCSC transport and kernel research, supervised Android/Linux controller
+handoff, and capture-based evaluation of bounded Bluetooth experiments on
+owned devices. Source, reproducible checks and redacted research reports are
+published here; toolchains, firmware, device backups and raw evidence stay local.
+
+As of 2026-10-29:
+
+- Android RFCOMM fixture exchange and LAB advertisement reception have been
+  validated. The rooted Linux helper separately supports LE scanning and
+  Classic L2CAP echo through the installed research kernel.
+- The helper now includes a bounded `echo-seq` mode: up to 100 requests over
+  at most 60 seconds, a minimum scheduled interval of 600 ms, and an abort
+  after three consecutive failures. Android ownership is restored by the
+  phone supervisor after Linux releases the controller.
+- An instrumented Noise Air Buds Pro 4 run returned 100/100 echoes. Independent
+  Nothing Phone (2a) HCI evidence showed no disconnection during the run or
+  two minutes afterward; the user noticed no audio interruption. See the
+  [instrumented result](reports/noise4-l2cap-instrumented-2026-10-29.md) and
+  [earlier inconclusive observation](reports/noise4-l2cap-observation-2026-10-29.md).
+- `scripts/summarize_bt_link.py` checks a selected Classic link in a private
+  BTSnoop capture without emitting device addresses or payloads. See the
+  [capture workflow](research/capture.md).
+- Linux RFCOMM remains unavailable in the installed image. A corrected kernel
+  candidate has compiled offline but has not been installed or live-tested.
+
+These results establish protocol responsiveness and observed link state for
+specific lab runs. They do not establish a general Bluetooth disconnect
+mechanism or an audio continuity guarantee.
+
 ## Layout
 
 - `android/`: Kotlin app source and Gradle project
-- `host/`: local toolchain (ignored from Git)
+- `host/`: tracked Linux fixtures and phone helper sources; local toolchains
+  under `host/toolchain/` are ignored
 - `host/blue_stress.py`: bounded laptop-side Bluetooth Classic responsiveness harness
 - `scripts/`: reproducible setup, build, install, cleanup
 - `research/`: source-backed hardware and API notes
 - `evidence/`: private captures/logs (ignored from Git)
 - `reports/`: redacted observations and feasibility assessment
 - `backups/`: ignored private partition backups, stock package and offline candidate images
-- `tests/`: manual test procedures
+- `tests/`: host unit tests, helper checks and manual device test procedures
 - `diff/`: local review diffs (generated files ignored)
 
 ## Rebuild
@@ -106,7 +139,8 @@ differences](research/config-difference-classification-2026-10-27.md),
 and recorded [source/recovery gaps](research/minimal-source-and-recovery-2026-10-27.md)
 and the [installation decision](research/minimal-readiness-decision-2026-10-27.md).
 The candidate retains the live embedded device tree and Magisk ramdisk.
-Nothing was flashed; the phone still runs its original kernel.
+That 2026-10-27 candidate review did not flash the phone. Later work installed
+the corrected research kernel described in the 2026-10-28 HCI report above.
 
 The source audit of the required repository and the maintained replacement
 harness are in [blue-deauth audit](research/blue-deauth-audit.md). A dry run
@@ -133,4 +167,4 @@ cd ~/m30-security-lab
 ./scripts/cleanup.sh YOUR_ADB_SERIAL
 ```
 
-Disable HCI snoop in Developer options if enabled, restart Bluetooth, and remove any exported files or private captures you no longer need. The scripts do not touch partitions, recovery, or SELinux.
+Disable HCI snoop in Developer options if enabled, restart Bluetooth, and remove any exported files or private captures you no longer need. `cleanup.sh` does not touch partitions, recovery, or SELinux.

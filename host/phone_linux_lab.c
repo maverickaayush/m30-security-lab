@@ -130,13 +130,14 @@ static int wait_socket(int fd, short events, long long deadline) {
     }
     errno=ETIMEDOUT; return -1;
 }
-static int classic_request(const char *mode, const bdaddr_t *local, const bdaddr_t *peer, int channel) {
+static int classic_request(const char *mode, const bdaddr_t *local, const bdaddr_t *peer,
+                           int channel, long long deadline) {
     int rfcomm=!strcmp(mode,"rfcomm");
     int fd=socket(AF_BLUETOOTH,(rfcomm?SOCK_STREAM:SOCK_RAW)|SOCK_NONBLOCK|SOCK_CLOEXEC,
                   rfcomm?BTPROTO_RFCOMM:BTPROTO_L2CAP);
     if(fd<0){event("protocol_socket_failed",errno);return 1;}
     int r, result=1;
-    long long start=millis(CLOCK_MONOTONIC), deadline=start+5000;
+    long long start=millis(CLOCK_MONOTONIC);
     if(rfcomm){
         struct sockaddr_rc addr={.rc_family=AF_BLUETOOTH,.rc_bdaddr=*local,.rc_channel=0};
         r=bind(fd,(void *)&addr,sizeof(addr));
@@ -198,18 +199,21 @@ done:
 #ifndef LAB_TEST
 int main(int argc, char **argv) {
     if ((argc != 5 && argc != 7) || strcmp(argv[1], "hci0") || !valid_id(argv[3])) {
-        fprintf(stderr, "usage: phone_linux_lab hci0 inspect|scan|down RUN_ID SECONDS(1..20) [TARGET CHANNEL]\n"); return 2;
+        fprintf(stderr, "usage: phone_linux_lab hci0 inspect|scan|down|echo|echo-seq|rfcomm RUN_ID SECONDS [TARGET CHANNEL_OR_COUNT]; echo-seq allows 1..60 seconds and 1..100 requests at least 600 ms apart\n"); return 2;
     }
     char *end;
     long seconds = strtol(argv[4], &end, 10);
-    if (*end || seconds < 1 || seconds > 20 ||
-        (strcmp(argv[2], "inspect") && strcmp(argv[2], "scan") && strcmp(argv[2], "down") && strcmp(argv[2],"rfcomm") && strcmp(argv[2],"echo"))) return 2;
-    int classic=!strcmp(argv[2],"rfcomm") || !strcmp(argv[2],"echo");
+    if (*end || seconds < 1 || seconds > 60 ||
+        (strcmp(argv[2], "inspect") && strcmp(argv[2], "scan") && strcmp(argv[2], "down") && strcmp(argv[2],"rfcomm") && strcmp(argv[2],"echo") && strcmp(argv[2],"echo-seq"))) return 2;
+    int sequence=!strcmp(argv[2],"echo-seq");
+    if(!sequence && seconds>20) return 2;
+    int classic=!strcmp(argv[2],"rfcomm") || !strcmp(argv[2],"echo") || sequence;
     bdaddr_t target; long channel=0;
     if(classic){
         if(argc!=7 || parse_address(argv[5],&target)) return 2;
         channel=strtol(argv[6],&end,10);
-        if(*end || channel<1 || channel>30) return 2;
+        if(*end || channel<1 || channel>(sequence ? 100 : 30)) return 2;
+        if(sequence && seconds*1000/channel<600) return 2;
     }else if(argc!=5) return 2;
     run_id = argv[3];
     setvbuf(stdout, NULL, _IOLBF, 0);
@@ -232,7 +236,7 @@ int main(int argc, char **argv) {
         event("recovery_down", r ? errno : 0); close(fd); return r != 0;
     }
     if (info.flags & (1U << HCI_UP)) { event("refuse_existing_owner", 1); close(fd); return 1; }
-    alarm(30);
+    alarm(sequence ? 65 : 30);
     if (ioctl(fd, HCIDEVUP, 0UL)) { event("up_failed", errno); close(fd); return 1; }
     event("linux_acquired", 0);
     struct hci_filter filter = {.type_mask=1U<<4,.event_mask={1U<<14 | 1U<<15,1U<<(0x3e - 32)},.opcode=0};
@@ -241,7 +245,41 @@ int main(int argc, char **argv) {
     if (command(fd, 0x1001, NULL, 0, 0)) goto cleanup;
     if(classic){
         if(ioctl(fd,HCIGETDEVINFO,&info)) goto cleanup;
-        result=classic_request(argv[2],&info.bdaddr,&target,(int)channel);
+        if(sequence){
+            long long sequence_start=millis(CLOCK_MONOTONIC);
+            long long run_deadline=sequence_start+seconds*1000;
+            long long interval=seconds*1000/channel;
+            int passed=0, failed=0, consecutive_failures=0;
+            event("sequence_limit",channel);
+            for(int i=0;i<channel && !cancelled && millis(CLOCK_MONOTONIC)<run_deadline;i++){
+                long long scheduled=sequence_start+i*interval;
+                while(!cancelled && millis(CLOCK_MONOTONIC)<scheduled)
+                    poll(NULL,0,100);
+                if(cancelled || millis(CLOCK_MONOTONIC)>=run_deadline) break;
+                long long op_deadline=millis(CLOCK_MONOTONIC)+5000;
+                if(op_deadline>run_deadline) op_deadline=run_deadline;
+                event("request_index",i+1);
+                if(classic_request("echo",&info.bdaddr,&target,1,op_deadline)){
+                    failed++;
+                    event("request_failed",i+1);
+                    consecutive_failures++;
+                    if(consecutive_failures>=3){
+                        event("abort_after_consecutive_failures",consecutive_failures);
+                        break;
+                    }
+                    continue;
+                }
+                passed++;
+                consecutive_failures=0;
+                event("request_passed",i+1);
+            }
+            event("requests_passed",passed);
+            event("requests_failed",failed);
+            result=cancelled?3:(failed?1:(passed==channel?0:4));
+        }else{
+            result=classic_request(argv[2],&info.bdaddr,&target,(int)channel,
+                                   millis(CLOCK_MONOTONIC)+5000);
+        }
         goto cleanup;
     }
     /* Passive scan; 60 ms interval / 30 ms window; no scan requests. */

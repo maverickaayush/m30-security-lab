@@ -3,6 +3,22 @@
 Run only with the phone and fixture devices owned by the lab. Keep the radio
 tests inside the isolated lab; the phone's advertisements are broadcasts.
 
+## Host checks without a connected device
+
+From the repository root:
+
+```bash
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+sh tests/test_phone_handoff.sh scripts/phone_handoff.sh
+```
+
+These checks cover the host harness, handoff model, offline parsers and
+supervisor argument rejection. They do not exercise the phone controller or
+validate a live link outcome. The BTSnoop tests use synthetic captures,
+including a known disconnect and missing/dropped evidence.
+
+## Device checks
+
 1. Build and unit-test:
 
    ```bash
