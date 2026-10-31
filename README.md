@@ -10,7 +10,7 @@ handoff, and capture-based evaluation of bounded Bluetooth experiments on
 owned devices. Source, reproducible checks and redacted research reports are
 published here; toolchains, firmware, device backups and raw evidence stay local.
 
-As of 2026-10-29:
+As of 2026-10-31:
 
 - Android RFCOMM fixture exchange and LAB advertisement reception have been
   validated. The rooted Linux helper separately supports LE scanning and
@@ -27,8 +27,10 @@ As of 2026-10-29:
 - `scripts/summarize_bt_link.py` checks a selected Classic link in a private
   BTSnoop capture without emitting device addresses or payloads. See the
   [capture workflow](research/capture.md).
-- Linux RFCOMM remains unavailable in the installed image. A corrected kernel
-  candidate has compiled offline but has not been installed or live-tested.
+- The RFCOMM-enabled kernel was flashed to BOOT on 2026-10-31. Android booted,
+  RFCOMM registered in `/proc/net/protocols`, and the BOOT readback matched
+  the package. A phone-side RFCOMM fixture exchange has not yet been tested.
+  See the [installation report](reports/rfcomm-kernel-flash-2026-10-31.md).
 
 These results establish protocol responsiveness and observed link state for
 specific lab runs. They do not establish a general Bluetooth disconnect
@@ -84,8 +86,9 @@ research kernel's SCSC-backed `hci0`, run one bounded operation, and restore
 Android ownership. The APK does not call that privileged helper or claim that
 Android and Linux can own the controller concurrently. Linux LE and L2CAP
 fixture results are recorded in [the phone-side HCI report](research/linux-hci-experiments-2026-10-28.md);
-RFCOMM remains blocked in the installed image because its protocol object was
-omitted from the family Makefile.
+The earlier installed image omitted the RFCOMM protocol object; the 2026-10-31
+BOOT update now registers RFCOMM. An end-to-end phone-side fixture exchange
+still needs validation.
 See [mobile integration](reports/mobile-integration.md),
 [REA handoff trace](research/rea-handoff-followup.md),
 [offline bridge compile](research/kernel-bridge-build.md), and
@@ -130,7 +133,8 @@ The proposed internal HCI kernel config and source readiness checks are in
 auto-registration/ABOX research kernel is installed and has passed the
 bounded HCI command, LE scan, L2CAP echo and ownership-restoration checks
 described in [the phone-side HCI report](research/linux-hci-experiments-2026-10-28.md).
-The newer RFCOMM-enabled candidate is offline-only and has not been installed.
+The RFCOMM-enabled BOOT image was installed on 2026-10-31; see the
+[installation report](reports/rfcomm-kernel-flash-2026-10-31.md).
 
 The 2026-10-27 minimal-kernel continuation classified [all 46 earlier config
 differences](research/config-difference-classification-2026-10-27.md),

@@ -60,7 +60,7 @@ the operation to the laptop.
 | Is the target a required protocol peer? | Assumed | Baseline request and target metadata are recorded | Named target, Classic capability, and baseline response |
 | Is work bounded? | No | Count, pace, duration, and per-call deadlines | JSON run reaches `completed`, `deadline`, or `stopped` |
 | Did the target's existing link disconnect? | Never measured | Explicitly `not_measured` until independent observation | Target-side connection log before/during/after |
-| Can it run on this phone? | Not on the original Android-only image | Supervised phone path now runs bounded HCI/LE/L2CAP operations; RFCOMM is unavailable until the candidate is installed | Live run IDs and `/proc/net/protocols`; no concurrent ownership |
+| Can it run on this phone? | Not on the original Android-only image | Supervised phone path runs bounded HCI/LE/L2CAP operations; RFCOMM registered after the 2026-10-31 BOOT update, with phone-side exchange still untested | Live run IDs and `/proc/net/protocols`; no concurrent ownership |
 
 ## Phone-side follow-up
 
@@ -75,7 +75,9 @@ laptop fixture saw a connection. The runtime configuration contained
 `CONFIG_BT_RFCOMM=y`, but the exact family source revision used for the
 candidate comments out the `net/bluetooth/rfcomm/` Makefile entry. The project
 now carries a one-line source correction and an offline build that links the
-RFCOMM symbols. That candidate has not been flashed or live-tested.
+RFCOMM symbols. That candidate was offline at the time of this experiment. It was flashed on
+2026-10-31; RFCOMM registration is verified, while a phone-side exchange
+remains untested. See [the installation report](../reports/rfcomm-kernel-flash-2026-10-31.md).
 
 Evidence and run IDs are in
 [`research/linux-hci-experiments-2026-10-28.md`](linux-hci-experiments-2026-10-28.md).

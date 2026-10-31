@@ -106,8 +106,9 @@ access evidence; it does not change the disruption conclusion.
 The first phone-side RFCOMM attempt returned `EPROTONOSUPPORT` before the
 fixture saw a connection. The family source had `CONFIG_BT_RFCOMM=y` but
 omitted `net/bluetooth/rfcomm/` from its Makefile. An offline one-line fix
-compiled the RFCOMM objects, but that candidate has not been installed or
-tested. Full run IDs and private evidence locations are in
+compiled the RFCOMM objects. The image was installed on 2026-10-31 and
+RFCOMM registration was verified; a phone-side fixture exchange remains
+untested. See [the installation report](rfcomm-kernel-flash-2026-10-31.md). Full run IDs and private evidence locations are in
 [`research/linux-hci-experiments-2026-10-28.md`](../research/linux-hci-experiments-2026-10-28.md).
 
 No existing connection owned by another controller was interrupted. No
