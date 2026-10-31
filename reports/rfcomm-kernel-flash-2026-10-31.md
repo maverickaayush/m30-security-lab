@@ -48,3 +48,6 @@ readback matched the package hash exactly.
 These checks establish successful installation and RFCOMM kernel registration.
 A supervised Linux RFCOMM socket exchange with the cooperating laptop fixture
 has not yet been run on this image.
+
+The source patches, effective configuration and build instructions are in the
+[private kernel diff repository](https://github.com/maverickaayush/m30-kernel-diff).

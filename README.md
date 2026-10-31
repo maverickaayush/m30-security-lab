@@ -30,7 +30,8 @@ As of 2026-10-31:
 - The RFCOMM-enabled kernel was flashed to BOOT on 2026-10-31. Android booted,
   RFCOMM registered in `/proc/net/protocols`, and the BOOT readback matched
   the package. A phone-side RFCOMM fixture exchange has not yet been tested.
-  See the [installation report](reports/rfcomm-kernel-flash-2026-10-31.md).
+  See the [installation report](reports/rfcomm-kernel-flash-2026-10-31.md)
+  and [kernel diff repository](https://github.com/maverickaayush/m30-kernel-diff).
 
 These results establish protocol responsiveness and observed link state for
 specific lab runs. They do not establish a general Bluetooth disconnect
